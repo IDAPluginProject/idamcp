@@ -1,0 +1,1531 @@
+{
+  "metadata": {
+    "filepath": "test_binary",
+    "module": "test_binary",
+    "database_path": "test_binary.i64",
+    "imagebase": "0x0",
+    "imagesize": "0x4278",
+    "sha256": "c2037b278004f9f9a265167e105d8f5572032a03620825caacddfefb01f5d888",
+    "filesize": "0x7860",
+    "filetype": "Executable and Linkable Format (ELF)",
+    "bitness": 64,
+    "procname": "metapc",
+    "is_headless": true
+  },
+  "functions": [
+    {
+      "address": "0x1000",
+      "name": ".init_proc",
+      "size": "0x17"
+    },
+    {
+      "address": "0x1020",
+      "name": "sub_1020",
+      "size": "0xc"
+    },
+    {
+      "address": "0x1030",
+      "name": ".abort",
+      "size": "0x6"
+    },
+    {
+      "address": "0x1040",
+      "name": ".memcpy",
+      "size": "0x6"
+    },
+    {
+      "address": "0x1050",
+      "name": "._ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_PKc",
+      "size": "0x6"
+    },
+    {
+      "address": "0x1060",
+      "name": "._ZNSolsEPFRSoS_E",
+      "size": "0x6"
+    },
+    {
+      "address": "0x1070",
+      "name": "._ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_c",
+      "size": "0x6"
+    },
+    {
+      "address": "0x1080",
+      "name": ".exit",
+      "size": "0x6"
+    },
+    {
+      "address": "0x1090",
+      "name": ".snprintf",
+      "size": "0x6"
+    },
+    {
+      "address": "0x10a0",
+      "name": "._ZNSolsEi",
+      "size": "0x6"
+    },
+    {
+      "address": "0x10b0",
+      "name": "._ZNSolsEl",
+      "size": "0x6"
+    },
+    {
+      "address": "0x10c0",
+      "name": "__cxa_finalize",
+      "size": "0x6"
+    },
+    {
+      "address": "0x10d0",
+      "name": "_start",
+      "size": "0x22"
+    },
+    {
+      "address": "0x1100",
+      "name": "deregister_tm_clones",
+      "size": "0x29"
+    },
+    {
+      "address": "0x1130",
+      "name": "register_tm_clones",
+      "size": "0x39"
+    },
+    {
+      "address": "0x1170",
+      "name": "__do_global_dtors_aux",
+      "size": "0x39"
+    },
+    {
+      "address": "0x11b0",
+      "name": "frame_dummy",
+      "size": "0x9"
+    },
+    {
+      "address": "0x11c0",
+      "name": "_Z17noreturn_functioni",
+      "size": "0x20"
+    },
+    {
+      "address": "0x11e0",
+      "name": "_Z11callee_funcv",
+      "size": "0x28"
+    },
+    {
+      "address": "0x1210",
+      "name": "_Z14another_calleev",
+      "size": "0x28"
+    },
+    {
+      "address": "0x1240",
+      "name": "_Z11caller_funci",
+      "size": "0x28"
+    },
+    {
+      "address": "0x1270",
+      "name": "_Z14compute_localsii",
+      "size": "0x9a"
+    },
+    {
+      "address": "0x1310",
+      "name": "_Z13handle_switchi",
+      "size": "0x235"
+    },
+    {
+      "address": "0x1550",
+      "name": "_Z12process_loopi",
+      "size": "0x95"
+    },
+    {
+      "address": "0x15f0",
+      "name": "_Z13struct_localsv",
+      "size": "0x82"
+    },
+    {
+      "address": "0x1680",
+      "name": "_Z21complex_struct_localsv",
+      "size": "0x85"
+    },
+    {
+      "address": "0x1710",
+      "name": "main",
+      "size": "0x185"
+    },
+    {
+      "address": "0x1898",
+      "name": ".term_proc",
+      "size": "0x9"
+    },
+    {
+      "address": "0x41f0",
+      "name": "_ZSt4endlIcSt11char_traitsIcEERSt13basic_ostreamIT_T0_ES6_",
+      "size": "0x8"
+    },
+    {
+      "address": "0x41f8",
+      "name": "abort",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4200",
+      "name": "__libc_start_main",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4208",
+      "name": "memcpy",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4210",
+      "name": "_ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_PKc",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4218",
+      "name": "_ZNSolsEPFRSoS_E",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4220",
+      "name": "_ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_c",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4228",
+      "name": "exit",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4238",
+      "name": "_ZSt21ios_base_library_initv",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4240",
+      "name": "snprintf",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4248",
+      "name": "_ZNSolsEi",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4250",
+      "name": "_ZNSolsEl",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4258",
+      "name": "__imp___cxa_finalize",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4260",
+      "name": "_ITM_deregisterTMCloneTable",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4268",
+      "name": "__gmon_start__",
+      "size": "0x8"
+    },
+    {
+      "address": "0x4270",
+      "name": "_ITM_registerTMCloneTable",
+      "size": "0x8"
+    }
+  ],
+  "globals": [
+    {
+      "address": "0x394",
+      "name": "aGnu"
+    },
+    {
+      "address": "0x3ac",
+      "name": "aLib64LdLinuxX8"
+    },
+    {
+      "address": "0x3c8",
+      "name": "elf_gnu_hash_nbuckets"
+    },
+    {
+      "address": "0x3cc",
+      "name": "elf_gnu_hash_symbias"
+    },
+    {
+      "address": "0x3d0",
+      "name": "elf_gnu_hash_bitmask_nwords"
+    },
+    {
+      "address": "0x3d4",
+      "name": "elf_gnu_hash_shift"
+    },
+    {
+      "address": "0x3d8",
+      "name": "elf_gnu_hash_indexes"
+    },
+    {
+      "address": "0x3e0",
+      "name": "elf_gnu_hash_bucket"
+    },
+    {
+      "address": "0x3e8",
+      "name": "elf_gnu_hash_chain"
+    },
+    {
+      "address": "0x5a1",
+      "name": "aGmonStart"
+    },
+    {
+      "address": "0x5b0",
+      "name": "aItmDeregistert"
+    },
+    {
+      "address": "0x5cc",
+      "name": "aItmRegistertmc"
+    },
+    {
+      "address": "0x5e6",
+      "name": "aZstlsist11char"
+    },
+    {
+      "address": "0x61c",
+      "name": "aZnsolsei"
+    },
+    {
+      "address": "0x626",
+      "name": "aZnsolsel"
+    },
+    {
+      "address": "0x630",
+      "name": "aZst4endlicst11"
+    },
+    {
+      "address": "0x66b",
+      "name": "aZnsolsepfrsosE"
+    },
+    {
+      "address": "0x67c",
+      "name": "aZst21iosBaseLi"
+    },
+    {
+      "address": "0x699",
+      "name": "aZstlsist11char_0"
+    },
+    {
+      "address": "0x6d1",
+      "name": "aZst4cout"
+    },
+    {
+      "address": "0x6db",
+      "name": "aSnprintf"
+    },
+    {
+      "address": "0x6e4",
+      "name": "aExit"
+    },
+    {
+      "address": "0x6e9",
+      "name": "aLibcStartMain"
+    },
+    {
+      "address": "0x6fb",
+      "name": "aCxaFinalize"
+    },
+    {
+      "address": "0x70a",
+      "name": "aMemcpy"
+    },
+    {
+      "address": "0x711",
+      "name": "aAbort"
+    },
+    {
+      "address": "0x717",
+      "name": "aLibstdcSo6"
+    },
+    {
+      "address": "0x726",
+      "name": "aLibmSo6"
+    },
+    {
+      "address": "0x730",
+      "name": "aLibgccSSo1"
+    },
+    {
+      "address": "0x73e",
+      "name": "aLibcSo6"
+    },
+    {
+      "address": "0x748",
+      "name": "aGlibcxx3432"
+    },
+    {
+      "address": "0x757",
+      "name": "aGlibcxx34"
+    },
+    {
+      "address": "0x763",
+      "name": "aGlibc214"
+    },
+    {
+      "address": "0x76e",
+      "name": "aGlibc234"
+    },
+    {
+      "address": "0x779",
+      "name": "aGlibc225"
+    },
+    {
+      "address": "0x2000",
+      "name": "_IO_stdin_used"
+    },
+    {
+      "address": "0x2004",
+      "name": "aHelloMcpTestin"
+    },
+    {
+      "address": "0x201e",
+      "name": "aInsideCalleeFu"
+    },
+    {
+      "address": "0x2031",
+      "name": "aInsideAnotherC"
+    },
+    {
+      "address": "0x2047",
+      "name": "format"
+    },
+    {
+      "address": "0x205e",
+      "name": "aSwitchingOn"
+    },
+    {
+      "address": "0x2071",
+      "name": "aZero"
+    },
+    {
+      "address": "0x2076",
+      "name": "aOne"
+    },
+    {
+      "address": "0x207a",
+      "name": "aTwo"
+    },
+    {
+      "address": "0x207e",
+      "name": "aThree"
+    },
+    {
+      "address": "0x2084",
+      "name": "aFour"
+    },
+    {
+      "address": "0x2089",
+      "name": "aFive"
+    },
+    {
+      "address": "0x208e",
+      "name": "aTen"
+    },
+    {
+      "address": "0x2092",
+      "name": "aTheAnswer"
+    },
+    {
+      "address": "0x209d",
+      "name": "aOneHundred"
+    },
+    {
+      "address": "0x20a9",
+      "name": "aOther"
+    },
+    {
+      "address": "0x20af",
+      "name": "aLocalStructsS1"
+    },
+    {
+      "address": "0x20c4",
+      "name": "aS2B"
+    },
+    {
+      "address": "0x20cc",
+      "name": "aComplexLocalSt"
+    },
+    {
+      "address": "0x20ec",
+      "name": "aC2TC"
+    },
+    {
+      "address": "0x20f6",
+      "name": "aGlobalStruct"
+    },
+    {
+      "address": "0x2106",
+      "name": "aB"
+    },
+    {
+      "address": "0x210b",
+      "name": "aCallerFuncResu"
+    },
+    {
+      "address": "0x2120",
+      "name": "aComputeLocalsR"
+    },
+    {
+      "address": "0x2138",
+      "name": "aLoopResult"
+    },
+    {
+      "address": "0x21a0",
+      "name": "__GNU_EH_FRAME_HDR"
+    },
+    {
+      "address": "0x23dc",
+      "name": "__FRAME_END__"
+    },
+    {
+      "address": "0x24a4",
+      "name": "aGnu_0"
+    },
+    {
+      "address": "0x24b8",
+      "name": "__abi_tag"
+    },
+    {
+      "address": "0x24c4",
+      "name": "aGnu_1"
+    },
+    {
+      "address": "0x3d58",
+      "name": "__frame_dummy_init_array_entry"
+    },
+    {
+      "address": "0x3d60",
+      "name": "__do_global_dtors_aux_fini_array_entry"
+    },
+    {
+      "address": "0x3d80",
+      "name": "aLocal1"
+    },
+    {
+      "address": "0x3da0",
+      "name": "_DYNAMIC"
+    },
+    {
+      "address": "0x3fb0",
+      "name": "__cxa_finalize_ptr"
+    },
+    {
+      "address": "0x3fb8",
+      "name": "_ZSt4endlIcSt11char_traitsIcEERSt13basic_ostreamIT_T0_ES6__ptr"
+    },
+    {
+      "address": "0x3fc0",
+      "name": "__libc_start_main_ptr"
+    },
+    {
+      "address": "0x3fc8",
+      "name": "_ZSt4cout_ptr"
+    },
+    {
+      "address": "0x3fd0",
+      "name": "_ITM_deregisterTMCloneTable_ptr"
+    },
+    {
+      "address": "0x3fd8",
+      "name": "__gmon_start___ptr"
+    },
+    {
+      "address": "0x3fe0",
+      "name": "_ITM_registerTMCloneTable_ptr"
+    },
+    {
+      "address": "0x3fe8",
+      "name": "_GLOBAL_OFFSET_TABLE_"
+    },
+    {
+      "address": "0x4048",
+      "name": "__data_start"
+    },
+    {
+      "address": "0x4050",
+      "name": "__dso_handle"
+    },
+    {
+      "address": "0x4058",
+      "name": "global_int"
+    },
+    {
+      "address": "0x405c",
+      "name": "global_char"
+    },
+    {
+      "address": "0x405e",
+      "name": "global_short"
+    },
+    {
+      "address": "0x4060",
+      "name": "global_double"
+    },
+    {
+      "address": "0x4068",
+      "name": "global_string"
+    },
+    {
+      "address": "0x4070",
+      "name": "global_string2"
+    },
+    {
+      "address": "0x4078",
+      "name": "global_struct"
+    },
+    {
+      "address": "0x4088",
+      "name": "complex_struct"
+    },
+    {
+      "address": "0x40c0",
+      "name": "__TMC_END__"
+    },
+    {
+      "address": "0x40d0",
+      "name": "bss_int"
+    },
+    {
+      "address": "0x40e0",
+      "name": "bss_buffer"
+    },
+    {
+      "address": "0x41e0",
+      "name": "bss_double"
+    },
+    {
+      "address": "0x41e8",
+      "name": "_end"
+    },
+    {
+      "address": "0x4230",
+      "name": "_ZSt4cout"
+    }
+  ],
+  "segments": [
+    {
+      "name": "LOAD",
+      "start": "0x0",
+      "end": "0xa48",
+      "size": "0xa48",
+      "permissions": "r--"
+    },
+    {
+      "name": ".init",
+      "start": "0x1000",
+      "end": "0x1017",
+      "size": "0x17",
+      "permissions": "r-x"
+    },
+    {
+      "name": "LOAD",
+      "start": "0x1017",
+      "end": "0x1020",
+      "size": "0x9",
+      "permissions": "r-x"
+    },
+    {
+      "name": ".plt",
+      "start": "0x1020",
+      "end": "0x10c0",
+      "size": "0xa0",
+      "permissions": "r-x"
+    },
+    {
+      "name": ".plt.got",
+      "start": "0x10c0",
+      "end": "0x10c8",
+      "size": "0x8",
+      "permissions": "r-x"
+    },
+    {
+      "name": "LOAD",
+      "start": "0x10c8",
+      "end": "0x10d0",
+      "size": "0x8",
+      "permissions": "r-x"
+    },
+    {
+      "name": ".text",
+      "start": "0x10d0",
+      "end": "0x1895",
+      "size": "0x7c5",
+      "permissions": "r-x"
+    },
+    {
+      "name": "LOAD",
+      "start": "0x1895",
+      "end": "0x1898",
+      "size": "0x3",
+      "permissions": "r-x"
+    },
+    {
+      "name": ".fini",
+      "start": "0x1898",
+      "end": "0x18a1",
+      "size": "0x9",
+      "permissions": "r-x"
+    },
+    {
+      "name": ".rodata",
+      "start": "0x2000",
+      "end": "0x21a0",
+      "size": "0x1a0",
+      "permissions": "r--"
+    },
+    {
+      "name": ".eh_frame_hdr",
+      "start": "0x21a0",
+      "end": "0x2214",
+      "size": "0x74",
+      "permissions": "r--"
+    },
+    {
+      "name": "LOAD",
+      "start": "0x2214",
+      "end": "0x2218",
+      "size": "0x4",
+      "permissions": "r--"
+    },
+    {
+      "name": ".eh_frame",
+      "start": "0x2218",
+      "end": "0x23e0",
+      "size": "0x1c8",
+      "permissions": "r--"
+    },
+    {
+      "name": "LOAD",
+      "start": "0x23e0",
+      "end": "0x24d8",
+      "size": "0xf8",
+      "permissions": "r--"
+    },
+    {
+      "name": ".init_array",
+      "start": "0x3d58",
+      "end": "0x3d60",
+      "size": "0x8",
+      "permissions": "rw-"
+    },
+    {
+      "name": ".fini_array",
+      "start": "0x3d60",
+      "end": "0x3d68",
+      "size": "0x8",
+      "permissions": "rw-"
+    },
+    {
+      "name": ".data.rel.ro",
+      "start": "0x3d68",
+      "end": "0x3da0",
+      "size": "0x38",
+      "permissions": "rw-"
+    },
+    {
+      "name": "LOAD",
+      "start": "0x3da0",
+      "end": "0x3fb0",
+      "size": "0x210",
+      "permissions": "rw-"
+    },
+    {
+      "name": ".got",
+      "start": "0x3fb0",
+      "end": "0x3fe8",
+      "size": "0x38",
+      "permissions": "rw-"
+    },
+    {
+      "name": ".got.plt",
+      "start": "0x3fe8",
+      "end": "0x4048",
+      "size": "0x60",
+      "permissions": "rw-"
+    },
+    {
+      "name": ".data",
+      "start": "0x4048",
+      "end": "0x40c0",
+      "size": "0x78",
+      "permissions": "rw-"
+    },
+    {
+      "name": ".bss",
+      "start": "0x40c0",
+      "end": "0x41e8",
+      "size": "0x128",
+      "permissions": "rw-"
+    },
+    {
+      "name": ".prgend",
+      "start": "0x41e8",
+      "end": "0x41e9",
+      "size": "0x1",
+      "permissions": "---"
+    },
+    {
+      "name": "extern",
+      "start": "0x41f0",
+      "end": "0x4278",
+      "size": "0x88",
+      "permissions": "---"
+    }
+  ],
+  "imports": [
+    {
+      "address": "0x41f0",
+      "imported_name": "_ZSt4endlIcSt11char_traitsIcEERSt13basic_ostreamIT_T0_ES6_@@GLIBCXX_3.4",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x41f8",
+      "imported_name": "abort@@GLIBC_2.2.5",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4200",
+      "imported_name": "__libc_start_main@@GLIBC_2.34",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4208",
+      "imported_name": "memcpy@@GLIBC_2.14",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4210",
+      "imported_name": "_ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_PKc@@GLIBCXX_3.4",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4218",
+      "imported_name": "_ZNSolsEPFRSoS_E@@GLIBCXX_3.4",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4220",
+      "imported_name": "_ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_c@@GLIBCXX_3.4",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4228",
+      "imported_name": "exit@@GLIBC_2.2.5",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4230",
+      "imported_name": "_ZSt4cout@@GLIBCXX_3.4",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4238",
+      "imported_name": "_ZSt21ios_base_library_initv@@GLIBCXX_3.4.32",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4240",
+      "imported_name": "snprintf@@GLIBC_2.2.5",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4248",
+      "imported_name": "_ZNSolsEi@@GLIBCXX_3.4",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4250",
+      "imported_name": "_ZNSolsEl@@GLIBCXX_3.4",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4258",
+      "imported_name": "__cxa_finalize@@GLIBC_2.2.5",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4260",
+      "imported_name": "_ITM_deregisterTMCloneTable",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4268",
+      "imported_name": "__gmon_start__",
+      "module": ".dynsym"
+    },
+    {
+      "address": "0x4270",
+      "imported_name": "_ITM_registerTMCloneTable",
+      "module": ".dynsym"
+    }
+  ],
+  "strings": [
+    {
+      "address": "0x3ac",
+      "length": 28,
+      "string": "/lib64/ld-linux-x86-64.so.2"
+    },
+    {
+      "address": "0x5a1",
+      "length": 15,
+      "string": "__gmon_start__"
+    },
+    {
+      "address": "0x5b0",
+      "length": 28,
+      "string": "_ITM_deregisterTMCloneTable"
+    },
+    {
+      "address": "0x5cc",
+      "length": 26,
+      "string": "_ITM_registerTMCloneTable"
+    },
+    {
+      "address": "0x5e6",
+      "length": 54,
+      "string": "_ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_c"
+    },
+    {
+      "address": "0x61c",
+      "length": 10,
+      "string": "_ZNSolsEi"
+    },
+    {
+      "address": "0x626",
+      "length": 10,
+      "string": "_ZNSolsEl"
+    },
+    {
+      "address": "0x630",
+      "length": 59,
+      "string": "_ZSt4endlIcSt11char_traitsIcEERSt13basic_ostreamIT_T0_ES6_"
+    },
+    {
+      "address": "0x66b",
+      "length": 17,
+      "string": "_ZNSolsEPFRSoS_E"
+    },
+    {
+      "address": "0x67c",
+      "length": 29,
+      "string": "_ZSt21ios_base_library_initv"
+    },
+    {
+      "address": "0x699",
+      "length": 56,
+      "string": "_ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_PKc"
+    },
+    {
+      "address": "0x6d1",
+      "length": 10,
+      "string": "_ZSt4cout"
+    },
+    {
+      "address": "0x6db",
+      "length": 9,
+      "string": "snprintf"
+    },
+    {
+      "address": "0x6e9",
+      "length": 18,
+      "string": "__libc_start_main"
+    },
+    {
+      "address": "0x6fb",
+      "length": 15,
+      "string": "__cxa_finalize"
+    },
+    {
+      "address": "0x70a",
+      "length": 7,
+      "string": "memcpy"
+    },
+    {
+      "address": "0x711",
+      "length": 6,
+      "string": "abort"
+    },
+    {
+      "address": "0x717",
+      "length": 15,
+      "string": "libstdc++.so.6"
+    },
+    {
+      "address": "0x726",
+      "length": 10,
+      "string": "libm.so.6"
+    },
+    {
+      "address": "0x730",
+      "length": 14,
+      "string": "libgcc_s.so.1"
+    },
+    {
+      "address": "0x73e",
+      "length": 10,
+      "string": "libc.so.6"
+    },
+    {
+      "address": "0x748",
+      "length": 15,
+      "string": "GLIBCXX_3.4.32"
+    },
+    {
+      "address": "0x757",
+      "length": 12,
+      "string": "GLIBCXX_3.4"
+    },
+    {
+      "address": "0x763",
+      "length": 11,
+      "string": "GLIBC_2.14"
+    },
+    {
+      "address": "0x76e",
+      "length": 11,
+      "string": "GLIBC_2.34"
+    },
+    {
+      "address": "0x779",
+      "length": 12,
+      "string": "GLIBC_2.2.5"
+    },
+    {
+      "address": "0x2004",
+      "length": 26,
+      "string": "Hello, MCP testing world!"
+    },
+    {
+      "address": "0x201e",
+      "length": 19,
+      "string": "Inside callee_func"
+    },
+    {
+      "address": "0x2031",
+      "length": 22,
+      "string": "Inside another_callee"
+    },
+    {
+      "address": "0x2047",
+      "length": 23,
+      "string": "x=%d, y=%d, z=%d, w=%d"
+    },
+    {
+      "address": "0x205e",
+      "length": 15,
+      "string": "Switching on: "
+    },
+    {
+      "address": "0x207e",
+      "length": 6,
+      "string": "Three"
+    },
+    {
+      "address": "0x2092",
+      "length": 11,
+      "string": "The Answer"
+    },
+    {
+      "address": "0x209d",
+      "length": 12,
+      "string": "One Hundred"
+    },
+    {
+      "address": "0x20a9",
+      "length": 6,
+      "string": "Other"
+    },
+    {
+      "address": "0x20af",
+      "length": 21,
+      "string": "Local structs: s1.a="
+    },
+    {
+      "address": "0x20c4",
+      "length": 8,
+      "string": ", s2.b="
+    },
+    {
+      "address": "0x20cc",
+      "length": 32,
+      "string": "Complex local structs: c1.name="
+    },
+    {
+      "address": "0x20ec",
+      "length": 10,
+      "string": ", c2.t.c="
+    },
+    {
+      "address": "0x20f6",
+      "length": 16,
+      "string": "Global struct: "
+    },
+    {
+      "address": "0x210b",
+      "length": 21,
+      "string": "Caller func result: "
+    },
+    {
+      "address": "0x2120",
+      "length": 24,
+      "string": "Compute locals result: "
+    },
+    {
+      "address": "0x2138",
+      "length": 14,
+      "string": "Loop result: "
+    },
+    {
+      "address": "0x2180",
+      "length": 7,
+      "string": "Local2"
+    },
+    {
+      "address": "0x227f",
+      "length": 6,
+      "string": ";*3$\""
+    },
+    {
+      "address": "0x3d80",
+      "length": 7,
+      "string": "Local1"
+    }
+  ],
+  "operands": {
+    "0x11c8": [
+      {
+        "type": "Base + Index + Displacement",
+        "value": "[rbp+t]"
+      },
+      {
+        "type": "Register",
+        "value": "edi"
+      }
+    ]
+  },
+  "basic_blocks": {
+    "0x1240": {
+      "id": 0,
+      "start": "0x1240",
+      "end": "0x1251",
+      "successors": [
+        1,
+        2
+      ],
+      "predecessors": []
+    }
+  },
+  "function_flags": {
+    "0x1240": [
+      {
+        "flag": "FUNC_FRAME",
+        "description": "Function uses frame pointer (BP)"
+      },
+      {
+        "flag": "FUNC_SP_READY",
+        "description": "SP-analysis has been performed. If this flag is on, the stack change points should not be not modified anymore. Currently this analysis is performed only for PC"
+      },
+      {
+        "flag": "FUNC_PROLOG_OK",
+        "description": "Prolog analysis has been performed by last SP-analysis"
+      },
+      {
+        "flag": "FUNC_PURGED_OK",
+        "description": "'argsize' field has been validated. If this bit is clear and 'argsize' is 0, then we do not known the real number of bytes removed from the stack. This bit is handled by the processor module."
+      }
+    ]
+  },
+  "xrefs_from": {
+    "0x1251": [
+      {
+        "address": "0x1256",
+        "type": "code",
+        "function": {
+          "address": "0x1256",
+          "name": "_Z11caller_funci",
+          "size": "0x28"
+        }
+      },
+      {
+        "address": "0x11e0",
+        "type": "code",
+        "function": {
+          "address": "0x11e0",
+          "name": "_Z11callee_funcv",
+          "size": "0x28"
+        }
+      }
+    ]
+  },
+  "xrefs_to": {
+    "0x11e0": [
+      {
+        "address": "0x1251",
+        "type": "code",
+        "function": {
+          "address": "0x1251",
+          "name": "_Z11caller_funci",
+          "size": "0x28"
+        }
+      }
+    ]
+  },
+  "data_xrefs_from": {
+    "0x4098": []
+  },
+  "xrefs_to_field": {
+    "TestStruct.a": [
+      {
+        "address": "0x1732",
+        "type": "data",
+        "function": {
+          "address": "0x1732",
+          "name": "main",
+          "size": "0x185"
+        }
+      },
+      {
+        "address": "0x1755",
+        "type": "data",
+        "function": {
+          "address": "0x1755",
+          "name": "main",
+          "size": "0x185"
+        }
+      }
+    ]
+  },
+  "callees": {
+    "0x1240": [
+      {
+        "address": "0x11e0",
+        "name": "_Z11callee_funcv"
+      },
+      {
+        "address": "0x1210",
+        "name": "_Z14another_calleev"
+      }
+    ]
+  },
+  "callers": {
+    "0x11e0": [
+      {
+        "call_sites": [
+          "0x1251"
+        ],
+        "function": {
+          "address": "0x1240",
+          "name": "_Z11caller_funci",
+          "size": "0x28"
+        }
+      }
+    ]
+  },
+  "entry_points": [
+    {
+      "address": "0x1710",
+      "name": "main",
+      "size": "0x185"
+    },
+    {
+      "address": "0x11c0",
+      "name": "_Z17noreturn_functioni",
+      "size": "0x20"
+    },
+    {
+      "address": "0x15f0",
+      "name": "_Z13struct_localsv",
+      "size": "0x82"
+    },
+    {
+      "address": "0x1898",
+      "name": ".term_proc",
+      "size": "0x9"
+    },
+    {
+      "address": "0x1310",
+      "name": "_Z13handle_switchi",
+      "size": "0x235"
+    },
+    {
+      "address": "0x1550",
+      "name": "_Z12process_loopi",
+      "size": "0x95"
+    },
+    {
+      "address": "0x10d0",
+      "name": "_start",
+      "size": "0x22"
+    },
+    {
+      "address": "0x1000",
+      "name": ".init_proc",
+      "size": "0x17"
+    },
+    {
+      "address": "0x1270",
+      "name": "_Z14compute_localsii",
+      "size": "0x9a"
+    },
+    {
+      "address": "0x11e0",
+      "name": "_Z11callee_funcv",
+      "size": "0x28"
+    },
+    {
+      "address": "0x1680",
+      "name": "_Z21complex_struct_localsv",
+      "size": "0x85"
+    },
+    {
+      "address": "0x1210",
+      "name": "_Z14another_calleev",
+      "size": "0x28"
+    },
+    {
+      "address": "0x1240",
+      "name": "_Z11caller_funci",
+      "size": "0x28"
+    }
+  ],
+  "call_graph_from": {
+    "0x1240": {
+      "nodes": [
+        {
+          "address": "0x1240",
+          "function_name": "_Z11caller_funci",
+          "is_external": false
+        },
+        {
+          "address": "0x11e0",
+          "function_name": "_Z11callee_funcv",
+          "is_external": false
+        },
+        {
+          "address": "0x1210",
+          "function_name": "_Z14another_calleev",
+          "is_external": false
+        }
+      ],
+      "edges": [
+        {
+          "source": "0x1240",
+          "target": "0x11e0"
+        },
+        {
+          "source": "0x1240",
+          "target": "0x1210"
+        }
+      ]
+    }
+  },
+  "call_graph_to": {
+    "0x11e0": {
+      "nodes": [
+        {
+          "address": "0x11e0",
+          "function_name": "_Z11callee_funcv",
+          "is_external": false
+        },
+        {
+          "address": "0x1240",
+          "function_name": "_Z11caller_funci",
+          "is_external": false
+        }
+      ],
+      "edges": [
+        {
+          "source": "0x1240",
+          "target": "0x11e0"
+        }
+      ]
+    }
+  },
+  "call_graph_between": {
+    "0x1710_0x11e0": {
+      "nodes": [
+        {
+          "address": "0x1710",
+          "function_name": "main"
+        },
+        {
+          "address": "0x1240",
+          "function_name": "_Z11caller_funci"
+        },
+        {
+          "address": "0x11e0",
+          "function_name": "_Z11callee_funcv"
+        }
+      ],
+      "edges": [
+        {
+          "source": "0x1240",
+          "target": "0x11e0"
+        },
+        {
+          "source": "0x1710",
+          "target": "0x1240"
+        }
+      ]
+    }
+  },
+  "cfgs": {
+    "0x1240": {
+      "function_address": "0x1240",
+      "blocks": [
+        {
+          "id": 0,
+          "start": "0x1240",
+          "end": "0x1251",
+          "successors": [
+            1,
+            2
+          ],
+          "predecessors": []
+        },
+        {
+          "id": 1,
+          "start": "0x1251",
+          "end": "0x1258",
+          "successors": [
+            3
+          ],
+          "predecessors": [
+            0
+          ]
+        },
+        {
+          "id": 2,
+          "start": "0x1258",
+          "end": "0x125d",
+          "successors": [
+            3
+          ],
+          "predecessors": [
+            0
+          ]
+        },
+        {
+          "id": 3,
+          "start": "0x125d",
+          "end": "0x1268",
+          "successors": [],
+          "predecessors": [
+            1,
+            2
+          ]
+        }
+      ]
+    }
+  },
+  "decompiled": {
+    "0x11e0": "[L:1][0x11e0]| void callee_func()\n[L:2][------]| {\n[L:3][------]|   __int64 v0; // rax\n[L:4][------]| \n[L:5][0x11f2]|   v0 = std::operator<<<std::char_traits<char>>(a1: &std::cout, a2: \"Inside callee_func\");\n[L:6][0x1201]|   std::ostream::operator<<(a1: v0, a2: &std::endl<char,std::char_traits<char>>);\n[L:7][------]| }"
+  },
+  "disasm": {
+    "0x1240_2": ".text:0000000000001240             _Z11caller_funci: ; function start\n.text:0000000000001240 55                              push    rbp\n.text:0000000000001241 48 89 E5                        mov     rbp, rsp\n.text:0000000000001244                         ; ------------------------------------------------------------------"
+  },
+  "ida_view": {
+    "0x11e0_0x120e": ".text:00000000000011E0\n.text:00000000000011E0                         ; =============== S U B R O U T I N E =======================================\n.text:00000000000011E0\n.text:00000000000011E0                         ; Attributes: bp-based frame\n.text:00000000000011E0\n.text:00000000000011E0                         ; void callee_func()\n.text:00000000000011E0                                         public _Z11callee_funcv\n.text:00000000000011E0                         _Z11callee_funcv proc near              ; CODE XREF: caller_func(int)+11\u2193p\n.text:00000000000011E0                         ; __unwind {\n.text:00000000000011E0 55                                      push    rbp\n.text:00000000000011E1 48 89 E5                                mov     rbp, rsp\n.text:00000000000011E4 48 8B 3D DD 2D 00 00                    mov     rdi, cs:_ZSt4cout_ptr\n.text:00000000000011EB 48 8D 35 2C 0E 00 00                    lea     rsi, aInsideCalleeFu ; \"Inside callee_func\"\n.text:00000000000011F2 E8 59 FE FF FF                          call    __ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_PKc ; std::operator<<<std::char_traits<char>>(std::ostream &,char const*)\n.text:00000000000011F7 48 89 C7                                mov     rdi, rax\n.text:00000000000011FA 48 8B 35 B7 2D 00 00                    mov     rsi, cs:_ZSt4endlIcSt11char_traitsIcEERSt13basic_ostreamIT_T0_ES6__ptr\n.text:0000000000001201 E8 5A FE FF FF                          call    __ZNSolsEPFRSoS_E ; std::ostream::operator<<(std::ostream & (*)(std::ostream &))\n.text:0000000000001206 5D                                      pop     rbp\n.text:0000000000001207 C3                                      retn\n.text:0000000000001207                         ; } // starts at 11E0\n.text:0000000000001207                         _Z11callee_funcv endp\n.text:0000000000001207\n.text:0000000000001207                         ; ---------------------------------------------------------------------------\n.text:0000000000001208 0F 1F 84 00 00 00 00 00                 align 10h",
+    "0x1240_0x125b": ".text:0000000000001240\n.text:0000000000001240                         ; =============== S U B R O U T I N E =======================================\n.text:0000000000001240\n.text:0000000000001240                         ; Attributes: bp-based frame\n.text:0000000000001240\n.text:0000000000001240                         ; int __cdecl caller_func(int arg)\n.text:0000000000001240                                         public _Z11caller_funci\n.text:0000000000001240                         _Z11caller_funci proc near              ; CODE XREF: main+A5\u2193p\n.text:0000000000001240\n.text:0000000000001240                         arg             = dword ptr -4\n.text:0000000000001240\n.text:0000000000001240                         ; __unwind {\n.text:0000000000001240 55                                      push    rbp\n.text:0000000000001241 48 89 E5                                mov     rbp, rsp\n.text:0000000000001244 48 83 EC 10                             sub     rsp, 10h\n.text:0000000000001248 89 7D FC                                mov     [rbp+arg], edi\n.text:000000000000124B 83 7D FC 00                             cmp     [rbp+arg], 0\n.text:000000000000124F 7E 07                                   jle     short loc_1258\n.text:0000000000001251 E8 8A FF FF FF                          call    _Z11callee_funcv ; callee_func(void)\n.text:0000000000001256 EB 05                                   jmp     short loc_125D\n.text:0000000000001258                         ; ---------------------------------------------------------------------------\n.text:0000000000001258\n.text:0000000000001258                         loc_1258:                               ; CODE XREF: caller_func(int)+F\u2191j\n.text:0000000000001258 E8 B3 FF FF FF                          call    _Z14another_calleev ; another_callee(void)",
+    "0x40e0_0x40ee": ".bss:00000000000040E0                                         public bss_buffer\n.bss:00000000000040E0                         ; char bss_buffer[256]\n.bss:00000000000040E0 ?? ?? ?? ?? ?? ?? ?? ??\u2026bss_buffer      db 100h dup(?)"
+  },
+  "disassemble_function": {
+    "0x11e0": ".text:00000000000011E0\n.text:00000000000011E0                         ; =============== S U B R O U T I N E =======================================\n.text:00000000000011E0\n.text:00000000000011E0                         ; Attributes: bp-based frame\n.text:00000000000011E0\n.text:00000000000011E0                         ; void callee_func()\n.text:00000000000011E0                                         public _Z11callee_funcv\n.text:00000000000011E0                         _Z11callee_funcv proc near              ; CODE XREF: caller_func(int)+11\u2193p\n.text:00000000000011E0                         ; __unwind {\n.text:00000000000011E0 55                                      push    rbp\n.text:00000000000011E1 48 89 E5                                mov     rbp, rsp\n.text:00000000000011E4 48 8B 3D DD 2D 00 00                    mov     rdi, cs:_ZSt4cout_ptr\n.text:00000000000011EB 48 8D 35 2C 0E 00 00                    lea     rsi, aInsideCalleeFu ; \"Inside callee_func\"\n.text:00000000000011F2 E8 59 FE FF FF                          call    __ZStlsISt11char_traitsIcEERSt13basic_ostreamIcT_ES5_PKc ; std::operator<<<std::char_traits<char>>(std::ostream &,char const*)\n.text:00000000000011F7 48 89 C7                                mov     rdi, rax\n.text:00000000000011FA 48 8B 35 B7 2D 00 00                    mov     rsi, cs:_ZSt4endlIcSt11char_traitsIcEERSt13basic_ostreamIT_T0_ES6__ptr\n.text:0000000000001201 E8 5A FE FF FF                          call    __ZNSolsEPFRSoS_E ; std::ostream::operator<<(std::ostream & (*)(std::ostream &))\n.text:0000000000001206 5D                                      pop     rbp\n.text:0000000000001207 C3                                      retn\n.text:0000000000001207                         ; } // starts at 11E0\n.text:0000000000001207                         _Z11callee_funcv endp\n.text:0000000000001207\n.text:0000000000001207                         ; ---------------------------------------------------------------------------"
+  },
+  "stack_vars": {
+    "0x1270": [
+      {
+        "name": "var_70",
+        "offset": "0x0",
+        "size": "0x4",
+        "type": "_DWORD"
+      },
+      {
+        "name": "buffer",
+        "offset": "0x10",
+        "size": "0x40",
+        "type": "char[64]"
+      },
+      {
+        "name": "w",
+        "offset": "0x58",
+        "size": "0x4",
+        "type": "int"
+      },
+      {
+        "name": "z",
+        "offset": "0x5c",
+        "size": "0x4",
+        "type": "int"
+      },
+      {
+        "name": "y",
+        "offset": "0x60",
+        "size": "0x4",
+        "type": "int"
+      },
+      {
+        "name": "x",
+        "offset": "0x64",
+        "size": "0x4",
+        "type": "int"
+      },
+      {
+        "name": "b",
+        "offset": "0x68",
+        "size": "0x4",
+        "type": "int"
+      },
+      {
+        "name": "a",
+        "offset": "0x6c",
+        "size": "0x4",
+        "type": "int"
+      },
+      {
+        "name": "__saved_registers",
+        "offset": "0x70",
+        "size": "0x8",
+        "type": "_QWORD"
+      },
+      {
+        "name": "__return_address",
+        "offset": "0x78",
+        "size": "0x8",
+        "type": "_UNKNOWN *"
+      }
+    ]
+  },
+  "struct_at_address": {
+    "0x4078_TestStruct": {
+      "struct_name": "TestStruct",
+      "address": "0x4078",
+      "members": [
+        {
+          "offset": "0x00000000",
+          "type": "int",
+          "name": "a",
+          "value": "0x00000001 (1)"
+        },
+        {
+          "offset": "0x00000004",
+          "type": "char",
+          "name": "b",
+          "value": "0x41 (65)"
+        },
+        {
+          "offset": "0x00000008",
+          "type": "__int64",
+          "name": "c",
+          "value": "0x00000000000186A0 (100000)"
+        }
+      ]
+    }
+  }
+}

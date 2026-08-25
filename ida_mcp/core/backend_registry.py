@@ -1,0 +1,82 @@
+# Copyright (c) 2026 Google LLC
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+"""Registry manager for IDA MCP backends."""
+
+import atexit
+import json
+import os
+import pathlib
+from typing import Any
+
+
+class RegistryManager:
+  """Manages registration of MCP backends."""
+
+  def __init__(self, registry_dir: str):
+    self.registry_dir = pathlib.Path(registry_dir)
+    self.registry_dir.mkdir(parents=True, exist_ok=True)
+    self.current_file = None
+
+  def register(
+      self,
+      channel: str,
+      address: str | int,
+      name: str,
+      metadata: dict[str, Any] | None = None,
+  ) -> pathlib.Path:
+    """Register a backend.
+
+    Args:
+      channel: 'tcp' or 'uds'
+      address: port number (int) for tcp, or path (str) for uds.
+      name: the identifier name.
+      metadata: Optional dictionary containing database metadata.
+
+    Returns:
+      Path to the registry file created, or None if failed.
+    """
+    channel = channel.lower()
+
+    data = {
+        "pid": os.getpid(),
+        "channel": channel,
+        "address": address,
+        "name": name,
+        "metadata": metadata or {},
+    }
+
+    file_path = self.registry_dir / f"{name}.json"
+    with open(file_path, "w") as f:
+      json.dump(data, f)
+    self.current_file = file_path
+
+    # Register cleanup
+    atexit.register(self.cleanup)
+    return file_path
+
+  def cleanup(self) -> None:
+    """Removes the registry file."""
+    if self.current_file and self.current_file.exists():
+      try:
+        self.current_file.unlink()
+        print(f"Removed registry file: {self.current_file}")
+      except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"Failed to remove registry file: {e}")

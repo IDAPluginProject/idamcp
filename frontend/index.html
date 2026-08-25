@@ -1,0 +1,242 @@
+<!--
+Copyright (c) 2026 Google LLC
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IDA MCP Security Manager</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; }
+        #sidebar { width: 300px; background: #f0f0f0; border-right: 1px solid #ccc; padding: 20px; overflow-y: auto; }
+        #main { flex: 1; padding: 20px; overflow-y: auto; }
+        .backend-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #ddd; }
+        .backend-item:hover { background: #e0e0e0; }
+        .backend-item.active { background: #d0d0ff; }
+        h2 { margin-top: 0; }
+        .tool-item { margin: 5px 0; }
+        .controls { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .loading { color: #888; font-style: italic; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>Backends</h2>
+    <div id="backend-list">Loading...</div>
+</div>
+
+<div id="main">
+    <h2 id="selected-backend-name">Select a backend</h2>
+    <div id="content" style="display:none;">
+        <div class="controls">
+            <label>
+                <input type="checkbox" id="enable-all"> Enable All Unsafe Tools
+            </label>
+            <br>
+            <label>
+                <input type="checkbox" id="persistent" checked> Save setting to database
+            </label>
+        </div>
+
+        <h3>Unsafe Tools</h3>
+        <div id="tool-list"></div>
+    </div>
+</div>
+
+<script>
+    let currentBackend = null;
+    let unsafeTools = [];
+    let currentConfig = {};
+
+    async function fetchBackends() {
+        try {
+            const res = await fetch('/api/backends');
+            const backends = await res.json();
+            renderBackends(backends);
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function renderBackends(backends) {
+        const list = document.getElementById('backend-list');
+        list.innerHTML = '';
+
+        // Check if the current backend is still in the list
+        const backendExists = backends.some(b => b.name === currentBackend);
+        if (!backendExists && currentBackend !== null) {
+            currentBackend = null;
+            document.getElementById('content').style.display = 'none';
+            document.getElementById('selected-backend-name').textContent = "Select a backend";
+        }
+
+        if (backends.length === 0) {
+            list.innerHTML = 'No backends found.';
+            return;
+        }
+        backends.forEach(b => {
+            const div = document.createElement('div');
+            div.className = 'backend-item';
+            const basename = b.metadata && b.metadata.module ? b.metadata.module : 'Unknown';
+            div.textContent = `${basename} (${b.name})`;
+            div.title = b.metadata && b.metadata.filepath ? b.metadata.filepath : '';
+            if (currentBackend === b.name) div.classList.add('active');
+            div.onclick = () => selectBackend(b.name);
+            list.appendChild(div);
+        });
+    }
+
+    async function selectBackend(name) {
+        currentBackend = name;
+        document.querySelectorAll('.backend-item').forEach(el => {
+            el.classList.remove('active');
+            if (el.textContent.startsWith(name)) el.classList.add('active');
+        });
+
+        document.getElementById('selected-backend-name').textContent = name;
+        document.getElementById('content').style.display = 'block';
+        document.getElementById('tool-list').innerHTML = '<div class="loading">Loading tools...</div>';
+
+        await loadData();
+    }
+
+    async function loadData() {
+        if (!currentBackend) return;
+
+        try {
+            // 1. Get list of unsafe tools
+            const toolsRes = await rpcCall(currentBackend, 'list_unsafe_tools', {});
+            unsafeTools = toolsRes.content[0].text ? JSON.parse(toolsRes.content[0].text) : [];
+            // FastMCP usually returns object content if it's JSON? Or string?
+            // "content": [{"type": "text", "text": "["tool1", ...]"}]
+            // Wait, Python returns list. FastMCP serializes it to text in the content block.
+
+            // 2. Get current config
+            const configRes = await rpcCall(currentBackend, 'get_security_config', {});
+            currentConfig = JSON.parse(configRes.content[0].text);
+
+            renderTools();
+        } catch (e) {
+            handleError(e);
+        }
+    }
+
+    function handleError(e) {
+        if (e.message.includes("Failed to connect") || e.message.includes("No such file") || e.message.includes("Connection failed")) {
+            alert(`Backend ${currentBackend} disconnected.`);
+            // Remove from list
+            const list = document.getElementById('backend-list');
+            for (let i = 0; i < list.children.length; i++) {
+                if (list.children[i].textContent.includes(`(${currentBackend})`)) {
+                    list.removeChild(list.children[i]);
+                    break;
+                }
+            }
+            // Reset UI
+            currentBackend = null;
+            document.getElementById('content').style.display = 'none';
+            document.getElementById('selected-backend-name').textContent = "Select a backend";
+        } else {
+            document.getElementById('tool-list').innerHTML = `<div class="error">Error: ${e.message}</div>`;
+        }
+    }
+
+    function renderTools() {
+        const list = document.getElementById('tool-list');
+        list.innerHTML = '';
+
+        const enableAllCb = document.getElementById('enable-all');
+        enableAllCb.checked = currentConfig.enable_all_unsafe_tools;
+        enableAllCb.onchange = updateConfig;
+
+        document.getElementById('persistent').onchange = updateConfig;
+
+        unsafeTools.forEach(tool => {
+            const div = document.createElement('div');
+            div.className = 'tool-item';
+
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = tool;
+            cb.checked = currentConfig.enabled_unsafe_tools.includes(tool);
+            cb.disabled = currentConfig.enable_all_unsafe_tools; // Gray out if enable all
+            cb.onchange = updateConfig;
+
+            div.appendChild(cb);
+            div.appendChild(document.createTextNode(' ' + tool));
+            list.appendChild(div);
+        });
+    }
+
+    async function updateConfig() {
+        if (!currentBackend) return;
+
+        const enableAll = document.getElementById('enable-all').checked;
+        const persistent = document.getElementById('persistent').checked;
+        const enabledTools = [];
+
+        document.querySelectorAll('#tool-list input[type="checkbox"]').forEach(cb => {
+            cb.disabled = enableAll;
+            if (cb.checked) enabledTools.push(cb.value);
+        });
+
+        // Optimistic UI update
+        currentConfig.enable_all_unsafe_tools = enableAll;
+        currentConfig.enabled_unsafe_tools = enabledTools;
+
+        try {
+            await rpcCall(currentBackend, 'configure_unsafe_tools', {
+                enable_all_unsafe_tools: enableAll,
+                persistent: persistent,
+                enabled_unsafe_tools: enabledTools
+            });
+        } catch (e) {
+            handleError(e);
+            if (!e.message.includes("disconnected") && !e.message.includes("Failed to connect")) {
+                 alert('Failed to save config: ' + e.message);
+            }
+        }
+    }
+
+    async function rpcCall(backend, method, params) {
+        const res = await fetch(`/api/rpc/${backend}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ method, params })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'RPC failed');
+        return data;
+    }
+
+    // Monitor registry when gaining mouse focus
+    document.addEventListener('mouseenter', fetchBackends);
+    window.addEventListener('focus', fetchBackends);
+    fetchBackends();
+
+</script>
+
+</body>
+</html>
