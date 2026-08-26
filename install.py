@@ -23,9 +23,11 @@
 
 import argparse
 import contextlib
+import datetime
 import json
 import os
 import pathlib
+import shutil
 import sys
 from typing import Literal
 import unittest
@@ -37,11 +39,20 @@ try:
 except ImportError:
   generate_proxy = None
 
-# Try to import toml for Codex support.
+# Try to import tomllib (Python 3.11+ standard library or tomli) and tomli_w
+# for Codex support.
 try:
-  import toml  # pylint: disable=g-import-not-at-top
+  import tomllib  # pylint: disable=g-import-not-at-top
 except ImportError:
-  toml = None
+  try:
+    import tomli as tomllib  # pylint: disable=g-import-not-at-top
+  except ImportError:
+    tomllib = None
+
+try:
+  import tomli_w  # pylint: disable=g-import-not-at-top
+except ImportError:
+  tomli_w = None
 
 
 def is_running_in_ida() -> bool:
@@ -263,21 +274,52 @@ def install_server(
       settings_path = home / ".codex" / "config.toml"
 
   if name == "codex":
-    if toml is None:
-      print("[x] Error: 'toml' library is required to configure Codex.")
-      print("    Please install it with: pip install toml")
+    if tomllib is None:
+      print(
+          "[x] Error: 'tomllib' (Python 3.11+) or 'tomli' library is required"
+          " to configure Codex."
+      )
+      print("    Please install it with: pip install tomli")
+      return
+
+    if tomli_w is None:
+      print(
+          "[x] Error: 'tomli-w' library is required to write Codex"
+          " configuration."
+      )
+      print("    Please install it with: pip install tomli-w")
       return
 
     settings = {}
     if settings_path.exists():
       try:
-        with open(settings_path, "r") as f:
-          settings = toml.load(f)
+        with open(settings_path, "rb") as f:
+          settings = tomllib.load(f)
       except Exception as e:  # pylint: disable=broad-exception-caught
         print(
-            f"[!] Warning: Could not parse {settings_path}: {e}. Creating new"
-            " config."
+            "[x] Error: Failed to parse existing configuration at"
+            f" {settings_path}: {e}"
         )
+        return
+
+      if not isinstance(settings, dict):
+        print(
+            f"[x] Error: Configuration root in {settings_path} must be a table"
+            f" (dict), got {type(settings).__name__}."
+        )
+        return
+
+      # Make a backup with timestamp for the original configuration
+      timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+      backup_path = (
+          settings_path.parent / f"{settings_path.name}.{timestamp}.bak"
+      )
+      try:
+        shutil.copy2(settings_path, backup_path)
+        print(f"[+] Backed up original configuration to: {backup_path}")
+      except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"[x] Error: Failed to create backup at {backup_path}: {e}")
+        return
     else:
       settings_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -291,8 +333,8 @@ def install_server(
     }
 
     try:
-      with open(settings_path, "w") as f:
-        toml.dump(settings, f)
+      with open(settings_path, "wb") as f:
+        tomli_w.dump(settings, f)
       print(
           "[+] Codex MCP server 'idamcp' configured successfully in"
           f" {settings_path}."
@@ -307,11 +349,29 @@ def install_server(
     try:
       with open(settings_path, "r") as f:
         settings = json.load(f)
-    except json.JSONDecodeError:
+    except Exception as e:  # pylint: disable=broad-exception-caught
       print(
-          f"[!] Warning: Could not parse {settings_path}. Creating new"
-          " settings."
+          "[x] Error: Failed to parse existing configuration at"
+          f" {settings_path}: {e}"
       )
+      return
+
+    if not isinstance(settings, dict):
+      print(
+          f"[x] Error: Configuration root in {settings_path} must be a JSON"
+          f" object (dict), got {type(settings).__name__}."
+      )
+      return
+
+    # Make a backup with timestamp for the original configuration
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = settings_path.parent / f"{settings_path.name}.{timestamp}.bak"
+    try:
+      shutil.copy2(settings_path, backup_path)
+      print(f"[+] Backed up original configuration to: {backup_path}")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+      print(f"[x] Error: Failed to create backup at {backup_path}: {e}")
+      return
   else:
     settings_path.parent.mkdir(parents=True, exist_ok=True)
 
