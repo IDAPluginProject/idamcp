@@ -26,6 +26,7 @@ from typing import Annotated, Any, List, Union
 
 from gateway.forward import forward_to
 from gateway.forward import mcp_tool
+from shared.types import QueryResult
 import sqlglot
 from sqlglot import exp
 from sqlglot.optimizer.simplify import simplify
@@ -110,7 +111,9 @@ def adjust_query(parsed: Any) -> str:
     return None
 
   def _build_unsigned_cmp(
-      op_cls: type, left: exp.Expression, right: exp.Expression
+      op_cls: type[exp.GT | exp.GTE | exp.LT | exp.LTE],
+      left: exp.Expression,
+      right: exp.Expression,
   ) -> exp.Expression:
     """Translates a signed comparison into an unsigned comparison in SQLite.
 
@@ -293,6 +296,15 @@ def adjust_query(parsed: Any) -> str:
   return rewritten.sql(dialect="sqlite")
 
 
+def _to_query_result(res: dict[str, Any]) -> QueryResult:
+  """Constructs a QueryResult from a dictionary received over RPC."""
+  return QueryResult(
+      ok=res.get("ok", True),
+      rows=res.get("rows", []),
+      error=res.get("error"),
+  )
+
+
 @mcp_tool
 async def sql_query(
     database_id: Annotated[
@@ -306,7 +318,7 @@ async def sql_query(
         "SQL query or queries to execute. Supports multiple queries (in a list"
         + " or separated by ';').",
     ],
-) -> Union[List[dict[str, Any]], str, List[Union[List[dict[str, Any]], str]]]:
+) -> Union[QueryResult, List[QueryResult]]:
   """Executes read-only SQL queries against IDA Pro using SQLite.
 
   Tables ('functions', 'strings', 'names', 'imports', 'segments', 'local_types',
@@ -364,13 +376,14 @@ async def sql_query(
       or separated by ';').
 
   Returns:
-    A list of dictionaries for each row if a single query was provided,
-    or a list of such results (one per input query). All integer columns and
-    values are automatically formatted as hexadecimal strings (`0x...`). If
-    the query returns no data (e.g. PRAGMA), a success string is returned.
+    A QueryResult object if a single query was provided, or a list of
+    QueryResult objects (one per input query). Each QueryResult contains 'ok'
+    (bool), 'rows' (list of dicts with hexadecimal string formatting for
+    integers), and 'error' (error message string if failed, or None on
+    success).
   """
   queries_input = sql if isinstance(sql, list) else [sql]
-  results = []
+  results: list[QueryResult] = []
 
   for q in queries_input:
     q = q.strip()
@@ -380,7 +393,7 @@ async def sql_query(
       parsed_list = sqlglot.parse(q, read="sqlite")
       batch = []
       batch_indices = []
-      current_results = []
+      current_results: list[QueryResult | None] = []
 
       for node in parsed_list:
         if not node:
@@ -390,8 +403,14 @@ async def sql_query(
             (exp.Select, exp.Union, exp.Subquery, exp.Describe, exp.Pragma),
         ):
           current_results.append(
-              "Error: Only read-only queries (SELECT, DESCRIBE, etc.) are"
-              " allowed."
+              QueryResult(
+                  ok=False,
+                  rows=[],
+                  error=(
+                      "Error: Only read-only queries (SELECT, DESCRIBE, etc.)"
+                      " are allowed."
+                  ),
+              )
           )
           continue
 
@@ -412,15 +431,20 @@ async def sql_query(
         backend_results = await forward_to(
             database_id, "sql_query", {"queries": batch}
         )
-        if isinstance(backend_results, list):
-          for idx, res in zip(batch_indices, backend_results):
-            current_results[idx] = res
-        elif batch_indices:
-          current_results[batch_indices[0]] = backend_results
+        for idx, res in zip(batch_indices, backend_results):
+          current_results[idx] = _to_query_result(res)
 
-      results.extend(current_results)
+      for item in current_results:
+        if item is not None:
+          results.append(item)
     except Exception as e:
-      results.append(f"Error executing SQL: {str(e)}\n{traceback.format_exc()}")
+      results.append(
+          QueryResult(
+              ok=False,
+              rows=[],
+              error=f"Error executing SQL: {str(e)}\n{traceback.format_exc()}",
+          )
+      )
 
   return (
       results[0] if len(results) == 1 and not isinstance(sql, list) else results

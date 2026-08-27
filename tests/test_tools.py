@@ -1951,7 +1951,9 @@ hex(tid) if tid is not None else ""
         sql_res = await self.run_tool(
             "sql_query", sql="SELECT * FROM functions LIMIT 1"
         )
-        self.assertIsInstance(sql_res, list)
+        self.assertIsInstance(sql_res, dict)
+        self.assertTrue(sql_res["ok"])
+        self.assertIsInstance(sql_res["rows"], list)
       except RuntimeError as e:
         if "unknown tool" in str(e).lower():
           print(
@@ -2100,41 +2102,51 @@ hex(tid) if tid is not None else ""
     if "sql_query" in tools:
       # Test syntax error
       result = await self.run_tool("sql_query", sql="SELECT FROM;")
-      self.assertIsInstance(result, str)
-      self.assertTrue("error" in result.lower() or "syntax" in result.lower())
+      self.assertIsInstance(result, dict)
+      self.assertFalse(result["ok"])
+      err = (result.get("error") or "").lower()
+      self.assertTrue("error" in err or "syntax" in err)
 
       # Test write attempt (read-only block)
       result = await self.run_tool("sql_query", sql="DROP TABLE functions;")
-      self.assertIsInstance(result, str)
-      self.assertTrue(
-          "error" in result.lower() or "only read-only" in result.lower()
-      )
+      self.assertIsInstance(result, dict)
+      self.assertFalse(result["ok"])
+      err = (result.get("error") or "").lower()
+      self.assertTrue("error" in err or "only read-only" in err)
 
       # Test integers exceeding 64-bit limit
       result = await self.run_tool(
           "sql_query", sql="SELECT 0x10000000000000000;"
       )
-      self.assertIsInstance(result, str)
-      self.assertTrue("error" in result.lower() and "64-bit" in result.lower())
+      self.assertIsInstance(result, dict)
+      self.assertFalse(result["ok"])
+      err = (result.get("error") or "").lower()
+      self.assertTrue("error" in err and "64-bit" in err)
 
       result = await self.run_tool(
           "sql_query", sql="SELECT 18446744073709551616;"
       )
-      self.assertIsInstance(result, str)
-      self.assertTrue("error" in result.lower() and "64-bit" in result.lower())
+      self.assertIsInstance(result, dict)
+      self.assertFalse(result["ok"])
+      err = (result.get("error") or "").lower()
+      self.assertTrue("error" in err and "64-bit" in err)
 
       result = await self.run_tool(
           "sql_query",
           sql="SELECT * FROM functions WHERE start_ea = 0x10000000000000000;",
       )
-      self.assertIsInstance(result, str)
-      self.assertTrue("error" in result.lower() and "64-bit" in result.lower())
+      self.assertIsInstance(result, dict)
+      self.assertFalse(result["ok"])
+      err = (result.get("error") or "").lower()
+      self.assertTrue("error" in err and "64-bit" in err)
 
       result = await self.run_tool(
           "sql_query", sql="SELECT -0x8000000000000001;"
       )
-      self.assertIsInstance(result, str)
-      self.assertTrue("error" in result.lower() and "64-bit" in result.lower())
+      self.assertIsInstance(result, dict)
+      self.assertFalse(result["ok"])
+      err = (result.get("error") or "").lower()
+      self.assertTrue("error" in err and "64-bit" in err)
 
     # 7. list_strings with invalid regex
     with self.assertRaises(RuntimeError) as ctx:
@@ -2206,18 +2218,25 @@ hex(tid) if tid is not None else ""
       print("\n--- Skipping advanced sql_query tests (not installed) ---")
       return
 
+    async def run_sql(sql_input: str | list[str]):
+      res = await self.run_tool("sql_query", sql=sql_input)
+      if isinstance(res, list):
+        for item in res:
+          self.assertTrue(
+              item.get("ok", False), f"Query failed: {item.get('error')}"
+          )
+        return [item.get("rows", []) for item in res]
+      self.assertTrue(res.get("ok", False), f"Query failed: {res.get('error')}")
+      return res.get("rows", [])
+
     # 2. Verify system table queries (sqlite_master / PRAGMA schema verification)
-    tables = await self.run_tool(
-        "sql_query", sql="SELECT name FROM sqlite_master WHERE type='table'"
-    )
+    tables = await run_sql("SELECT name FROM sqlite_master WHERE type='table'")
     self.assertIsInstance(tables, list)
     table_names = {t["name"].lower() for t in tables}
     self.assertTrue({"functions", "segments", "names"}.issubset(table_names))
 
     # Verify pragma_table_info works
-    columns = await self.run_tool(
-        "sql_query", sql="SELECT * FROM pragma_table_info('functions')"
-    )
+    columns = await run_sql("SELECT * FROM pragma_table_info('functions')")
     self.assertIsInstance(columns, list)
     col_names = {c["name"].lower() for c in columns}
     self.assertTrue(
@@ -2239,7 +2258,7 @@ hex(tid) if tid is not None else ""
     hex_query = (
         f"SELECT * FROM functions WHERE start_ea = {rebased_caller_func_str}"
     )
-    sql_res = await self.run_tool("sql_query", sql=hex_query)
+    sql_res = await run_sql(hex_query)
     self.assertIsInstance(sql_res, list)
     self.assertEqual(len(sql_res), 1)
     self.assertIn(sql_res[0]["name"], ("caller_func", "_Z11caller_funci"))
@@ -2248,7 +2267,7 @@ hex(tid) if tid is not None else ""
     large_addr_query = (
         "SELECT * FROM functions WHERE start_ea > 0x7fffffffffffffff"
     )
-    sql_res = await self.run_tool("sql_query", sql=large_addr_query)
+    sql_res = await run_sql(large_addr_query)
     self.assertIsInstance(sql_res, list)
     self.assertEqual(len(sql_res), 0)
 
@@ -2259,8 +2278,10 @@ hex(tid) if tid is not None else ""
     sql_res = await self.run_tool("sql_query", sql=multi_query)
     self.assertIsInstance(sql_res, list)
     self.assertEqual(len(sql_res), 2)
-    self.assertIsInstance(sql_res[0], list)
-    self.assertIsInstance(sql_res[1], list)
+    self.assertTrue(sql_res[0]["ok"])
+    self.assertIsInstance(sql_res[0]["rows"], list)
+    self.assertTrue(sql_res[1]["ok"])
+    self.assertIsInstance(sql_res[1]["rows"], list)
 
     # 6. Verify list of queries execution
     multi_list = [
@@ -2270,8 +2291,10 @@ hex(tid) if tid is not None else ""
     sql_res = await self.run_tool("sql_query", sql=multi_list)
     self.assertIsInstance(sql_res, list)
     self.assertEqual(len(sql_res), 2)
-    self.assertIsInstance(sql_res[0], list)
-    self.assertIsInstance(sql_res[1], list)
+    self.assertTrue(sql_res[0]["ok"])
+    self.assertIsInstance(sql_res[0]["rows"], list)
+    self.assertTrue(sql_res[1]["ok"])
+    self.assertIsInstance(sql_res[1]["rows"], list)
 
     # 6b. Verify mixed valid and invalid queries preserve statement ordering
     mixed_sql = (
@@ -2281,34 +2304,30 @@ hex(tid) if tid is not None else ""
     mixed_res = await self.run_tool("sql_query", sql=mixed_sql)
     self.assertIsInstance(mixed_res, list)
     self.assertEqual(len(mixed_res), 3)
-    self.assertIsInstance(mixed_res[0], list)
-    self.assertIsInstance(mixed_res[1], str)
-    self.assertIn("only read-only", mixed_res[1].lower())
-    self.assertIsInstance(mixed_res[2], list)
+    self.assertTrue(mixed_res[0]["ok"])
+    self.assertIsInstance(mixed_res[0]["rows"], list)
+    self.assertFalse(mixed_res[1]["ok"])
+    self.assertIn("only read-only", (mixed_res[1].get("error") or "").lower())
+    self.assertTrue(mixed_res[2]["ok"])
+    self.assertIsInstance(mixed_res[2]["rows"], list)
 
     # 7. Verify Address Arithmetic & UDF (IDA_COMPUTE / IDA_COMPARE)
     rebased_caller_plus_four = hex(rebased_caller_func + 4)
     rebased_caller_minus_four = hex(rebased_caller_func - 4)
 
     # Test addition: WHERE address + 4 = rebased_caller_plus_four
-    arith_res = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT name FROM functions WHERE start_ea + 4 ="
-            f" {rebased_caller_plus_four}"
-        ),
+    arith_res = await run_sql(
+        "SELECT name FROM functions WHERE start_ea + 4 ="
+        f" {rebased_caller_plus_four}"
     )
     self.assertIsInstance(arith_res, list)
     self.assertEqual(len(arith_res), 1)
     self.assertIn(arith_res[0]["name"], ("caller_func", "_Z11caller_funci"))
 
     # Test subtraction: WHERE address - 4 = rebased_caller_minus_four
-    arith_res = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT name FROM functions WHERE start_ea - 4 ="
-            f" {rebased_caller_minus_four}"
-        ),
+    arith_res = await run_sql(
+        "SELECT name FROM functions WHERE start_ea - 4 ="
+        f" {rebased_caller_minus_four}"
     )
     self.assertIsInstance(arith_res, list)
     self.assertEqual(len(arith_res), 1)
@@ -2316,12 +2335,8 @@ hex(tid) if tid is not None else ""
 
     # Test bitwise AND: WHERE address & 0xF000 = page_base
     page_base = hex(rebased_caller_func & 0xF000)
-    arith_res = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT name FROM functions WHERE (start_ea & 0xF000) ="
-            f" {page_base}"
-        ),
+    arith_res = await run_sql(
+        f"SELECT name FROM functions WHERE (start_ea & 0xF000) = {page_base}"
     )
     self.assertIsInstance(arith_res, list)
     names = {f["name"] for f in arith_res}
@@ -2336,7 +2351,7 @@ hex(tid) if tid is not None else ""
 
     # Query xrefs to callee_func
     xref_query = f"SELECT * FROM xrefs WHERE to_ea = {rebased_callee_str}"
-    xref_res = await self.run_tool("sql_query", sql=xref_query)
+    xref_res = await run_sql(xref_query)
     self.assertIsInstance(xref_res, list)
     self.assertTrue(len(xref_res) >= 1)
     # Check that caller function address is correct
@@ -2344,12 +2359,9 @@ hex(tid) if tid is not None else ""
     self.assertIn(rebased_caller_func_str, caller_func_eas)
 
     # 9. Verify xrefs table range and set operators (>=, <=, >, <, BETWEEN, IN)
-    sample_xrefs = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT from_ea, to_ea FROM xrefs WHERE from_ea >="
-            " 0x1000 AND to_ea >= 0x1000 LIMIT 10"
-        ),
+    sample_xrefs = await run_sql(
+        "SELECT from_ea, to_ea FROM xrefs WHERE from_ea >= 0x1000 AND to_ea >="
+        " 0x1000 LIMIT 10"
     )
     self.assertIsInstance(sample_xrefs, list)
     self.assertGreaterEqual(len(sample_xrefs), 2)
@@ -2360,12 +2372,9 @@ hex(tid) if tid is not None else ""
     min_to, max_to = to_addrs[0], to_addrs[-1]
 
     # from_ea: >= and <=
-    res_gte_lte = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT from_ea, to_ea FROM xrefs WHERE from_ea >="
-            f" {hex(min_from)} AND from_ea <= {hex(max_from)}"
-        ),
+    res_gte_lte = await run_sql(
+        "SELECT from_ea, to_ea FROM xrefs WHERE from_ea >="
+        f" {hex(min_from)} AND from_ea <= {hex(max_from)}"
     )
     self.assertIsInstance(res_gte_lte, list)
     self.assertGreater(len(res_gte_lte), 0)
@@ -2373,23 +2382,17 @@ hex(tid) if tid is not None else ""
       self.assertTrue(min_from <= int(r["from_ea"], 16) <= max_from)
 
     # from_ea: BETWEEN ... AND ...
-    res_between = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT from_ea, to_ea FROM xrefs WHERE from_ea"
-            f" BETWEEN {hex(min_from)} AND {hex(max_from)}"
-        ),
+    res_between = await run_sql(
+        "SELECT from_ea, to_ea FROM xrefs WHERE from_ea"
+        f" BETWEEN {hex(min_from)} AND {hex(max_from)}"
     )
     self.assertIsInstance(res_between, list)
     self.assertEqual(len(res_between), len(res_gte_lte))
 
     # from_ea: > and <
-    res_gt_lt = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT from_ea, to_ea FROM xrefs WHERE from_ea >"
-            f" {hex(min_from)} AND from_ea < {hex(max_from)}"
-        ),
+    res_gt_lt = await run_sql(
+        "SELECT from_ea, to_ea FROM xrefs WHERE from_ea >"
+        f" {hex(min_from)} AND from_ea < {hex(max_from)}"
     )
     self.assertIsInstance(res_gt_lt, list)
     for r in res_gt_lt:
@@ -2397,9 +2400,8 @@ hex(tid) if tid is not None else ""
 
     # from_ea: IN (...)
     sample_from_tuple = f"({hex(from_addrs[0])}, {hex(from_addrs[1])})"
-    res_in = await self.run_tool(
-        "sql_query",
-        sql=f"SELECT from_ea FROM xrefs WHERE from_ea IN {sample_from_tuple}",
+    res_in = await run_sql(
+        f"SELECT from_ea FROM xrefs WHERE from_ea IN {sample_from_tuple}"
     )
     self.assertIsInstance(res_in, list)
     self.assertGreater(len(res_in), 0)
@@ -2407,12 +2409,9 @@ hex(tid) if tid is not None else ""
       self.assertIn(int(r["from_ea"], 16), {from_addrs[0], from_addrs[1]})
 
     # to_ea: >= and <=
-    res_to_gte_lte = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT from_ea, to_ea FROM xrefs WHERE to_ea >="
-            f" {hex(min_to)} AND to_ea <= {hex(max_to)}"
-        ),
+    res_to_gte_lte = await run_sql(
+        "SELECT from_ea, to_ea FROM xrefs WHERE to_ea >="
+        f" {hex(min_to)} AND to_ea <= {hex(max_to)}"
     )
     self.assertIsInstance(res_to_gte_lte, list)
     self.assertGreater(len(res_to_gte_lte), 0)
@@ -2420,23 +2419,17 @@ hex(tid) if tid is not None else ""
       self.assertTrue(min_to <= int(r["to_ea"], 16) <= max_to)
 
     # to_ea: BETWEEN ... AND ...
-    res_to_between = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT from_ea, to_ea FROM xrefs WHERE to_ea"
-            f" BETWEEN {hex(min_to)} AND {hex(max_to)}"
-        ),
+    res_to_between = await run_sql(
+        "SELECT from_ea, to_ea FROM xrefs WHERE to_ea"
+        f" BETWEEN {hex(min_to)} AND {hex(max_to)}"
     )
     self.assertIsInstance(res_to_between, list)
     self.assertEqual(len(res_to_between), len(res_to_gte_lte))
 
     # to_ea: > and <
-    res_to_gt_lt = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT from_ea, to_ea FROM xrefs WHERE to_ea >"
-            f" {hex(min_to)} AND to_ea < {hex(max_to)}"
-        ),
+    res_to_gt_lt = await run_sql(
+        "SELECT from_ea, to_ea FROM xrefs WHERE to_ea >"
+        f" {hex(min_to)} AND to_ea < {hex(max_to)}"
     )
     self.assertIsInstance(res_to_gt_lt, list)
     for r in res_to_gt_lt:
@@ -2444,9 +2437,8 @@ hex(tid) if tid is not None else ""
 
     # to_ea: IN (...)
     sample_to_tuple = f"({hex(to_addrs[0])}, {hex(to_addrs[1])})"
-    res_to_in = await self.run_tool(
-        "sql_query",
-        sql=f"SELECT to_ea FROM xrefs WHERE to_ea IN {sample_to_tuple}",
+    res_to_in = await run_sql(
+        f"SELECT to_ea FROM xrefs WHERE to_ea IN {sample_to_tuple}"
     )
     self.assertIsInstance(res_to_in, list)
     self.assertGreater(len(res_to_in), 0)
@@ -2457,19 +2449,19 @@ hex(tid) if tid is not None else ""
     pragma_res = await self.run_tool(
         "sql_query", sql="PRAGMA foreign_keys = ON"
     )
-    self.assertEqual(pragma_res, "Query executed successfully.")
+    self.assertIsInstance(pragma_res, dict)
+    self.assertTrue(pragma_res["ok"])
+    self.assertEqual(pragma_res["rows"], [])
+    self.assertIsNone(pragma_res["error"])
 
-    pragma_val = await self.run_tool("sql_query", sql="PRAGMA foreign_keys")
+    pragma_val = await run_sql("PRAGMA foreign_keys")
     self.assertIsInstance(pragma_val, list)
     self.assertEqual(pragma_val[0]["foreign_keys"], "0x1")
 
     # 9. Verify NOT IN with subquery (regression test for rewrite bug)
-    notin_res = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT name, start_ea FROM functions WHERE start_ea NOT IN"
-            " (SELECT DISTINCT to_ea FROM xrefs WHERE type = 'call')"
-        ),
+    notin_res = await run_sql(
+        "SELECT name, start_ea FROM functions WHERE start_ea NOT IN"
+        " (SELECT DISTINCT to_ea FROM xrefs WHERE type = 'call')"
     )
     self.assertIsInstance(notin_res, list)
     names = {r["name"] for r in notin_res}
@@ -2477,28 +2469,21 @@ hex(tid) if tid is not None else ""
     self.assertNotIn(".abort", names)
 
     # 10. Verify address arithmetic alias (end_ea - start_ea as size)
-    res_size = await self.run_tool(
-        "sql_query",
-        sql="select start_ea, size from functions order by start_ea;",
+    res_size = await run_sql(
+        "select start_ea, size from functions order by start_ea;"
     )
-    res_sub_end_start = await self.run_tool(
-        "sql_query",
-        sql=(
-            "select start_ea, end_ea - start_ea as size from functions order"
-            " by start_ea;"
-        ),
+    res_sub_end_start = await run_sql(
+        "select start_ea, end_ea - start_ea as size from functions order by"
+        " start_ea;"
     )
     self.assertIsInstance(res_size, list)
     self.assertGreater(len(res_size), 0)
     self.assertEqual(res_sub_end_start, res_size)
 
     # Verify compound subtraction with scalar offset
-    res_sub_offset = await self.run_tool(
-        "sql_query",
-        sql=(
-            "select start_ea, end_ea - start_ea - 10 as adj_size from"
-            " functions where end_ea - start_ea - 10 > 0 order by start_ea;"
-        ),
+    res_sub_offset = await run_sql(
+        "select start_ea, end_ea - start_ea - 10 as adj_size from functions"
+        " where end_ea - start_ea - 10 > 0 order by start_ea;"
     )
     self.assertIsInstance(res_sub_offset, list)
     self.assertGreater(len(res_sub_offset), 0)
@@ -2506,22 +2491,16 @@ hex(tid) if tid is not None else ""
       self.assertGreater(int(row["adj_size"], 16), 0)
 
     # 11. Verify unsigned 64-bit address range comparison
-    res_range = await self.run_tool(
-        "sql_query",
-        sql=(
-            "select start_ea from functions where start_ea > 0 AND start_ea <"
-            " 0x8f00000000000000 order by start_ea;"
-        ),
+    res_range = await run_sql(
+        "select start_ea from functions where start_ea > 0 AND start_ea <"
+        " 0x8f00000000000000 order by start_ea;"
     )
-    res_between_range = await self.run_tool(
-        "sql_query",
-        sql=(
-            "select start_ea from functions where start_ea between 0 and"
-            " 0x8f00000000000000-1 order by start_ea;"
-        ),
+    res_between_range = await run_sql(
+        "select start_ea from functions where start_ea between 0 and"
+        " 0x8f00000000000000-1 order by start_ea;"
     )
-    res_all_start_ea = await self.run_tool(
-        "sql_query", sql="select start_ea from functions order by start_ea;"
+    res_all_start_ea = await run_sql(
+        "select start_ea from functions order by start_ea;"
     )
     self.assertIsInstance(res_range, list)
     self.assertGreater(len(res_range), 0)
@@ -2530,24 +2509,20 @@ hex(tid) if tid is not None else ""
     self.assertEqual(res_between_range, res_all_start_ea)
 
     # 12. Verify unaliased vs aliased aggregate functions on address columns
-    res_min_alias = await self.run_tool(
-        "sql_query", sql="select min(start_ea) as min_ea from functions;"
+    res_min_alias = await run_sql(
+        "select min(start_ea) as min_ea from functions;"
     )
-    res_min_no_alias = await self.run_tool(
-        "sql_query", sql="select min(start_ea) from functions;"
-    )
+    res_min_no_alias = await run_sql("select min(start_ea) from functions;")
     self.assertEqual(len(res_min_alias), 1)
     self.assertEqual(len(res_min_no_alias), 1)
     min_alias_val = list(res_min_alias[0].values())[0]
     min_no_alias_val = list(res_min_no_alias[0].values())[0]
     self.assertEqual(min_alias_val, min_no_alias_val)
 
-    res_max_alias = await self.run_tool(
-        "sql_query", sql="select max(start_ea) as max_ea from functions;"
+    res_max_alias = await run_sql(
+        "select max(start_ea) as max_ea from functions;"
     )
-    res_max_no_alias = await self.run_tool(
-        "sql_query", sql="select max(start_ea) from functions;"
-    )
+    res_max_no_alias = await run_sql("select max(start_ea) from functions;")
     self.assertEqual(len(res_max_alias), 1)
     self.assertEqual(len(res_max_no_alias), 1)
     max_alias_val = list(res_max_alias[0].values())[0]
@@ -2555,13 +2530,10 @@ hex(tid) if tid is not None else ""
     self.assertEqual(max_alias_val, max_no_alias_val)
 
     # 13. Verify address formatting functions (printf, format, cast, concat)
-    printf_res = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT printf('0x%X', f.start_ea) AS func_addr, f.name AS"
-            " func_name FROM functions f WHERE f.start_ea ="
-            f" {rebased_caller_func_str}"
-        ),
+    printf_res = await run_sql(
+        "SELECT printf('0x%X', f.start_ea) AS func_addr, f.name AS"
+        " func_name FROM functions f WHERE f.start_ea ="
+        f" {rebased_caller_func_str}"
     )
     self.assertIsInstance(printf_res, list)
     self.assertEqual(len(printf_res), 1)
@@ -2569,13 +2541,10 @@ hex(tid) if tid is not None else ""
         printf_res[0]["func_addr"].lower(), rebased_caller_func_str.lower()
     )
 
-    fmt_fn_res = await self.run_tool(
-        "sql_query",
-        sql=(
-            "SELECT format('0x%x', f.start_ea) AS fmt_ea, cast(f.start_ea AS"
-            " text) AS cast_ea, f.start_ea || '_sub' AS cat_ea FROM functions"
-            f" f WHERE f.start_ea = {rebased_caller_func_str}"
-        ),
+    fmt_fn_res = await run_sql(
+        "SELECT format('0x%x', f.start_ea) AS fmt_ea, cast(f.start_ea AS"
+        " text) AS cast_ea, f.start_ea || '_sub' AS cat_ea FROM functions"
+        f" f WHERE f.start_ea = {rebased_caller_func_str}"
     )
     self.assertIsInstance(fmt_fn_res, list)
     self.assertEqual(len(fmt_fn_res), 1)
@@ -2609,142 +2578,103 @@ hex(tid) if tid is not None else ""
     """
 
     # Test dynamic column-vs-column comparisons: a < b, a <= b, a > b, a >= b
-    res_lt = await self.run_tool(
-        "sql_query",
-        sql=f"{cte_table} SELECT id FROM sample WHERE a < b ORDER BY id",
+    res_lt = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE a < b ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_lt], [1, 2, 3, 4, 5])
 
-    res_lte = await self.run_tool(
-        "sql_query",
-        sql=f"{cte_table} SELECT id FROM sample WHERE a <= b ORDER BY id",
+    res_lte = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE a <= b ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_lte], [1, 2, 3, 4, 5, 6])
 
-    res_gt = await self.run_tool(
-        "sql_query",
-        sql=f"{cte_table} SELECT id FROM sample WHERE b > a ORDER BY id",
+    res_gt = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE b > a ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_gt], [1, 2, 3, 4, 5])
 
-    res_gte = await self.run_tool(
-        "sql_query",
-        sql=f"{cte_table} SELECT id FROM sample WHERE b >= a ORDER BY id",
+    res_gte = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE b >= a ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_gte], [1, 2, 3, 4, 5, 6])
 
     # Test column-vs-constant on right across sign boundaries:
-    res_gt_high = await self.run_tool(
-        "sql_query",
-        sql=(
-            f"{cte_table} SELECT id FROM sample WHERE a > 0x7fffffffffffffff"
-            " ORDER BY id"
-        ),
+    res_gt_high = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE a > 0x7fffffffffffffff"
+        " ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_gt_high], [4, 5, 6])
 
-    res_gte_high = await self.run_tool(
-        "sql_query",
-        sql=(
-            f"{cte_table} SELECT id FROM sample WHERE a >= 0x8000000000000000"
-            " ORDER BY id"
-        ),
+    res_gte_high = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE a >= 0x8000000000000000"
+        " ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_gte_high], [4, 5, 6])
 
-    res_lt_high = await self.run_tool(
-        "sql_query",
-        sql=(
-            f"{cte_table} SELECT id FROM sample WHERE a < 0x8000000000000000"
-            " ORDER BY id"
-        ),
+    res_lt_high = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE a < 0x8000000000000000"
+        " ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_lt_high], [1, 2, 3])
 
-    res_lte_high = await self.run_tool(
-        "sql_query",
-        sql=(
-            f"{cte_table} SELECT id FROM sample WHERE a <= 0x7fffffffffffffff"
-            " ORDER BY id"
-        ),
+    res_lte_high = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE a <= 0x7fffffffffffffff"
+        " ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_lte_high], [1, 2, 3])
 
     # Test constant on left across sign boundaries:
-    res_const_l_lte = await self.run_tool(
-        "sql_query",
-        sql=(
-            f"{cte_table} SELECT id FROM sample WHERE 0x8000000000000000 <= a"
-            " ORDER BY id"
-        ),
+    res_const_l_lte = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE 0x8000000000000000 <= a"
+        " ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_const_l_lte], [4, 5, 6])
 
-    res_const_l_lt = await self.run_tool(
-        "sql_query",
-        sql=(
-            f"{cte_table} SELECT id FROM sample WHERE 0x7fffffffffffffff < a"
-            " ORDER BY id"
-        ),
+    res_const_l_lt = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE 0x7fffffffffffffff < a"
+        " ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_const_l_lt], [4, 5, 6])
 
-    res_const_l_gt = await self.run_tool(
-        "sql_query",
-        sql=(
-            f"{cte_table} SELECT id FROM sample WHERE 0x8000000000000000 > a"
-            " ORDER BY id"
-        ),
+    res_const_l_gt = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE 0x8000000000000000 > a"
+        " ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_const_l_gt], [1, 2, 3])
 
-    res_const_l_gte = await self.run_tool(
-        "sql_query",
-        sql=(
-            f"{cte_table} SELECT id FROM sample WHERE 0x7fffffffffffffff >= a"
-            " ORDER BY id"
-        ),
+    res_const_l_gte = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE 0x7fffffffffffffff >= a"
+        " ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_const_l_gte], [1, 2, 3])
 
     # Test BETWEEN across 64-bit sign boundaries:
-    res_btw_cross = await self.run_tool(
-        "sql_query",
-        sql=(
-            f"{cte_table} SELECT id FROM sample WHERE a BETWEEN 0x1000 AND"
-            " 0x8000000000000000 ORDER BY id"
-        ),
+    res_btw_cross = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE a BETWEEN 0x1000 AND"
+        " 0x8000000000000000 ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_btw_cross], [2, 3, 4])
 
-    res_btw_high = await self.run_tool(
-        "sql_query",
-        sql=(
-            f"{cte_table} SELECT id FROM sample WHERE a BETWEEN"
-            " 0x8000000000000000 AND 0xffffffffffffffff ORDER BY id"
-        ),
+    res_btw_high = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE a BETWEEN"
+        " 0x8000000000000000 AND 0xffffffffffffffff ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_btw_high], [4, 5, 6])
 
-    res_not_btw = await self.run_tool(
-        "sql_query",
-        sql=(
-            f"{cte_table} SELECT id FROM sample WHERE a NOT BETWEEN 0x1000"
-            " AND 0x8000000000001000 ORDER BY id"
-        ),
+    res_not_btw = await run_sql(
+        f"{cte_table} SELECT id FROM sample WHERE a NOT BETWEEN 0x1000"
+        " AND 0x8000000000001000 ORDER BY id"
     )
     self.assertEqual([int(r["id"], 16) for r in res_not_btw], [1, 6])
 
     # Test dynamic column-vs-column comparisons on actual populated tables:
-    func_cmp = await self.run_tool(
-        "sql_query",
-        sql="SELECT name FROM functions WHERE end_ea > start_ea",
+    func_cmp = await run_sql(
+        "SELECT name FROM functions WHERE end_ea > start_ea"
     )
     self.assertGreater(len(func_cmp), 0)
 
-    func_cmp_inv = await self.run_tool(
-        "sql_query",
-        sql="SELECT name FROM functions WHERE start_ea >= end_ea",
+    func_cmp_inv = await run_sql(
+        "SELECT name FROM functions WHERE start_ea >= end_ea"
     )
     self.assertEqual(len(func_cmp_inv), 0)
 
@@ -2753,19 +2683,22 @@ hex(tid) if tid is not None else ""
     res = await self.run_tool(
         "sql_query", sql="SELECT COUNT(*) as cnt FROM xrefs"
     )
-    self.assertIsInstance(res, list)
-    self.assertEqual(len(res), 1)
-    initial_count = int(res[0]["cnt"], 16)
+    self.assertIsInstance(res, dict)
+    self.assertTrue(res["ok"])
+    self.assertEqual(len(res["rows"]), 1)
+    initial_count = int(res["rows"][0]["cnt"], 16)
     self.assertGreater(initial_count, 0)
 
     funcs = await self.run_tool(
         "sql_query", sql="SELECT start_ea FROM functions LIMIT 2"
     )
-    if len(funcs) < 2:
+    self.assertIsInstance(funcs, dict)
+    self.assertTrue(funcs["ok"])
+    if len(funcs["rows"]) < 2:
       self.skipTest("Need at least 2 functions to test xref lifecycle")
 
-    abs_addr1 = int(funcs[0]["start_ea"], 16)
-    abs_addr2 = int(funcs[1]["start_ea"], 16)
+    abs_addr1 = int(funcs["rows"][0]["start_ea"], 16)
+    abs_addr2 = int(funcs["rows"][1]["start_ea"], 16)
 
     eval_code = f"""
 import idc
@@ -2779,12 +2712,13 @@ res = idc.add_cref({abs_addr1}, {abs_addr2}, idaapi.fl_JN)
         f" to_ea = {hex(abs_addr2)}"
     )
     res = await self.run_tool("sql_query", sql=query)
-    self.assertIsInstance(res, list)
-    self.assertEqual(len(res), 1)
-    self.assertEqual(int(res[0]["from_ea"], 16), abs_addr1)
-    self.assertEqual(int(res[0]["to_ea"], 16), abs_addr2)
-    self.assertEqual(res[0]["type"], "jmp")
-    self.assertEqual(int(res[0]["from_function_ea"], 16), abs_addr1)
+    self.assertIsInstance(res, dict)
+    self.assertTrue(res["ok"])
+    self.assertEqual(len(res["rows"]), 1)
+    self.assertEqual(int(res["rows"][0]["from_ea"], 16), abs_addr1)
+    self.assertEqual(int(res["rows"][0]["to_ea"], 16), abs_addr2)
+    self.assertEqual(res["rows"][0]["type"], "jmp")
+    self.assertEqual(int(res["rows"][0]["from_function_ea"], 16), abs_addr1)
 
     eval_code_del = f"""
 import idc
@@ -2793,8 +2727,9 @@ res = idc.del_cref({abs_addr1}, {abs_addr2}, 0)
     await self.run_tool("idapython_eval", code=eval_code_del)
 
     res = await self.run_tool("sql_query", sql=query)
-    self.assertIsInstance(res, list)
-    self.assertEqual(len(res), 0)
+    self.assertIsInstance(res, dict)
+    self.assertTrue(res["ok"])
+    self.assertEqual(len(res["rows"]), 0)
 
     abs_addr3 = abs_addr1 + 1
     eval_code_dref = f"""
@@ -2809,11 +2744,12 @@ res = idc.add_dref({abs_addr1}, {abs_addr3}, idaapi.dr_W)
         f" to_ea = {hex(abs_addr3)}"
     )
     res = await self.run_tool("sql_query", sql=query_dref)
-    self.assertIsInstance(res, list)
-    self.assertEqual(len(res), 1)
-    self.assertEqual(int(res[0]["from_ea"], 16), abs_addr1)
-    self.assertEqual(int(res[0]["to_ea"], 16), abs_addr3)
-    self.assertEqual(res[0]["type"], "write")
+    self.assertIsInstance(res, dict)
+    self.assertTrue(res["ok"])
+    self.assertEqual(len(res["rows"]), 1)
+    self.assertEqual(int(res["rows"][0]["from_ea"], 16), abs_addr1)
+    self.assertEqual(int(res["rows"][0]["to_ea"], 16), abs_addr3)
+    self.assertEqual(res["rows"][0]["type"], "write")
 
     eval_code_dref_del = f"""
 import idc
@@ -2822,8 +2758,9 @@ res = idc.del_dref({abs_addr1}, {abs_addr3})
     await self.run_tool("idapython_eval", code=eval_code_dref_del)
 
     res = await self.run_tool("sql_query", sql=query_dref)
-    self.assertIsInstance(res, list)
-    self.assertEqual(len(res), 0)
+    self.assertIsInstance(res, dict)
+    self.assertTrue(res["ok"])
+    self.assertEqual(len(res["rows"]), 0)
 
   async def verify_safe_eval(self):
     from gateway.patcher import _safe_eval_math
@@ -3017,13 +2954,16 @@ print(f"REBASE RESULT: {rc}")
     self.assertEqual(imagebase, 0x400000)
 
     # Now get a function address (should be rebased) using an alias
-    funcs = await self.run_tool(
+    funcs_res = await self.run_tool(
         "sql_query",
         sql=(
             "SELECT start_ea AS dd FROM functions WHERE name ="
             " '_Z11caller_funci'"
         ),
     )
+    self.assertIsInstance(funcs_res, dict)
+    self.assertTrue(funcs_res["ok"])
+    funcs = funcs_res["rows"]
     self.assertEqual(len(funcs), 1)
     main_addr = int(funcs[0]["dd"], 16)
     print(f"DEBUG: Rebased caller_func_addr (via dd) = {hex(main_addr)}")
@@ -3033,7 +2973,10 @@ print(f"REBASE RESULT: {rc}")
     # Let's check xrefs.
     # Query all xrefs from 'caller_func' (0x401240).
     query = f"SELECT * FROM xrefs WHERE from_function_ea = {hex(main_addr)}"
-    res = await self.run_tool("sql_query", sql=query)
+    res_dict = await self.run_tool("sql_query", sql=query)
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertGreater(len(res), 0)
 
     # Check if returned addresses are absolute (should be >= 0x400000)
@@ -3055,7 +2998,10 @@ print(f"REBASE RESULT: {rc}")
         "SELECT * FROM (SELECT * FROM xrefs) WHERE from_function_ea ="
         f" {hex(main_addr)}"
     )
-    res = await self.run_tool("sql_query", sql=subquery)
+    res_dict = await self.run_tool("sql_query", sql=subquery)
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertGreater(len(res), 0)
     for row in res:
       from_ea = int(row["from_ea"], 16)
@@ -3072,7 +3018,10 @@ print(f"REBASE RESULT: {rc}")
         "WITH my_cte AS (SELECT * FROM xrefs) SELECT * FROM my_cte WHERE"
         f" from_function_ea = {hex(main_addr)}"
     )
-    res = await self.run_tool("sql_query", sql=cte_query)
+    res_dict = await self.run_tool("sql_query", sql=cte_query)
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertGreater(len(res), 0)
     for row in res:
       from_ea = int(row["from_ea"], 16)
@@ -3086,7 +3035,10 @@ print(f"REBASE RESULT: {rc}")
         "WITH my_cte AS (SELECT * FROM xrefs) SELECT from_ea AS xx_ea FROM"
         f" my_cte WHERE from_function_ea = {hex(main_addr)}"
     )
-    res = await self.run_tool("sql_query", sql=cte_alias_query)
+    res_dict = await self.run_tool("sql_query", sql=cte_alias_query)
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertGreater(len(res), 0)
     for row in res:
       xx_ea = int(row["xx_ea"], 16)
@@ -3099,7 +3051,10 @@ print(f"REBASE RESULT: {rc}")
         " FROM xrefs) SELECT f_ea FROM my_cte WHERE f_func_ea ="
         f" {hex(main_addr)}"
     )
-    res = await self.run_tool("sql_query", sql=cte_multi_alias)
+    res_dict = await self.run_tool("sql_query", sql=cte_multi_alias)
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertGreater(len(res), 0)
     for row in res:
       f_ea = int(row["f_ea"], 16)
@@ -3112,7 +3067,10 @@ print(f"REBASE RESULT: {rc}")
         " cte2 AS (SELECT addr1 AS addr2, name FROM cte1 WHERE addr1 >"
         f" {hex(main_addr - 0x1000)}) SELECT addr2 FROM cte2"
     )
-    res = await self.run_tool("sql_query", sql=nested_cte_query)
+    res_dict = await self.run_tool("sql_query", sql=nested_cte_query)
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertGreater(len(res), 0)
     for row in res:
       addr2 = int(row["addr2"], 16)
@@ -3124,7 +3082,10 @@ print(f"REBASE RESULT: {rc}")
         " '_Z11caller_funci' UNION SELECT to_ea AS addr FROM xrefs WHERE"
         f" from_function_ea = {hex(main_addr)}"
     )
-    res = await self.run_tool("sql_query", sql=union_query)
+    res_dict = await self.run_tool("sql_query", sql=union_query)
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertGreater(len(res), 0)
     for row in res:
       addr = int(row["addr"], 16)
@@ -3136,7 +3097,10 @@ print(f"REBASE RESULT: {rc}")
         " start_ea LIMIT 1) AS called_addr FROM functions WHERE name ="
         " '_Z11caller_funci'"
     )
-    res = await self.run_tool("sql_query", sql=subquery_in_select)
+    res_dict = await self.run_tool("sql_query", sql=subquery_in_select)
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertEqual(len(res), 1)
     self.assertIsNotNone(res[0]["called_addr"])
     called_addr = int(res[0]["called_addr"], 16)
@@ -3147,7 +3111,10 @@ print(f"REBASE RESULT: {rc}")
         "SELECT MIN(start_ea) AS min_addr FROM functions WHERE start_ea >"
         f" {hex(main_addr - 0x1000)}"
     )
-    res = await self.run_tool("sql_query", sql=agg_query)
+    res_dict = await self.run_tool("sql_query", sql=agg_query)
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertEqual(len(res), 1)
     self.assertIsNotNone(res[0]["min_addr"])
     min_addr = int(res[0]["min_addr"], 16)
@@ -3155,16 +3122,22 @@ print(f"REBASE RESULT: {rc}")
 
   async def verify_db_versioning_and_migration(self):
     """Verifies that DB version is set and database is migrated if version is old."""
-    # 1. Verify current version is 2 (target version)
-    res = await self.run_tool("sql_query", sql="PRAGMA user_version")
+    # 1. Verify current version is 3 (target version)
+    res_dict = await self.run_tool("sql_query", sql="PRAGMA user_version")
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertEqual(len(res), 1)
     self.assertIn("user_version", res[0])
     self.assertEqual(res[0]["user_version"], "0x3")
 
     # Verify functions table exists and has data (triggered population)
-    funcs = await self.run_tool(
+    funcs_res = await self.run_tool(
         "sql_query", sql="SELECT COUNT(*) as cnt FROM functions"
     )
+    self.assertIsInstance(funcs_res, dict)
+    self.assertTrue(funcs_res["ok"])
+    funcs = funcs_res["rows"]
     self.assertGreater(int(funcs[0]["cnt"], 16), 0)
 
     # 2. Manually set version to 1 and create legacy schema (__internal_xrefs
@@ -3181,7 +3154,10 @@ print("DEBUG: Force set version to 1 and created legacy view/table")
     await self.run_tool("idapython_eval", code=migrate_code)
 
     # Verify version was set to 1 (does not trigger migration yet)
-    res = await self.run_tool("sql_query", sql="PRAGMA user_version")
+    res_dict = await self.run_tool("sql_query", sql="PRAGMA user_version")
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertEqual(res[0]["user_version"], "0x1")
 
     # Now reset _db_version_checked and _created_tables to force migration on
@@ -3195,15 +3171,18 @@ print("DEBUG: Reset checked flag")
     await self.run_tool("idapython_eval", code=reset_code)
 
     # 3. Trigger a query. This should trigger migration (drop tables and views,
-    # set version to 2). We query sqlite_master to verify tables and views were
+    # set version to 3). We query sqlite_master to verify tables and views were
     # dropped.
-    entities = await self.run_tool(
+    entities_res = await self.run_tool(
         "sql_query",
         sql=(
             "SELECT type, name FROM sqlite_master WHERE type IN ('table',"
             " 'view') AND name NOT LIKE 'sqlite_%'"
         ),
     )
+    self.assertIsInstance(entities_res, dict)
+    self.assertTrue(entities_res["ok"])
+    entities = entities_res["rows"]
     entity_names = [e["name"] for e in entities]
     print(f"DEBUG: Entities after migration trigger: {entity_names}")
     for ent in [
@@ -3218,34 +3197,46 @@ print("DEBUG: Reset checked flag")
     ]:
       self.assertNotIn(ent, entity_names)
 
-    # Now verify version is back to 2
-    res = await self.run_tool("sql_query", sql="PRAGMA user_version")
+    # Now verify version is back to 3
+    res_dict = await self.run_tool("sql_query", sql="PRAGMA user_version")
+    self.assertIsInstance(res_dict, dict)
+    self.assertTrue(res_dict["ok"])
+    res = res_dict["rows"]
     self.assertEqual(res[0]["user_version"], "0x3")
 
     # Now query functions again, it should trigger re-population and succeed
-    funcs = await self.run_tool(
+    funcs_res = await self.run_tool(
         "sql_query", sql="SELECT COUNT(*) as cnt FROM functions"
     )
+    self.assertIsInstance(funcs_res, dict)
+    self.assertTrue(funcs_res["ok"])
+    funcs = funcs_res["rows"]
     self.assertGreater(int(funcs[0]["cnt"], 16), 0)
 
     # Verify tables exist again
-    tables_after = await self.run_tool(
+    tables_res = await self.run_tool(
         "sql_query", sql="SELECT name FROM sqlite_master WHERE type='table'"
     )
+    self.assertIsInstance(tables_res, dict)
+    self.assertTrue(tables_res["ok"])
+    tables_after = tables_res["rows"]
     table_names_after = [t["name"] for t in tables_after]
     print(f"DEBUG: Tables after re-population: {table_names_after}")
     self.assertIn("functions", table_names_after)
 
     # 4. Verify _db_metadata recorded image_min_ea
-    meta_rows = await self.run_tool(
+    meta_res = await self.run_tool(
         "sql_query",
         sql="SELECT value FROM _db_metadata WHERE key = 'image_min_ea'",
     )
+    self.assertIsInstance(meta_res, dict)
+    self.assertTrue(meta_res["ok"])
+    meta_rows = meta_res["rows"]
     self.assertEqual(len(meta_rows), 1)
     stored_ea = int(meta_rows[0]["value"], 16)
     print(f"DEBUG: Stored image_min_ea in metadata: {hex(stored_ea)}")
 
-    # 5. Simulate image_min_ea change in metadata while version is 2
+    # 5. Simulate image_min_ea change in metadata while version is 3
     corrupt_min_ea_code = """
 import ida_mcp.tools.query as q
 conn = q._get_rw_conn()
@@ -3257,13 +3248,16 @@ print("DEBUG: Corrupted image_min_ea to 0x12345 and reset checked flag")
     await self.run_tool("idapython_eval", code=corrupt_min_ea_code)
 
     # Trigger a query. Since stored image_min_ea != current_min_ea, all tables should be dropped and re-created
-    entities_after_ea_change = await self.run_tool(
+    entities_res = await self.run_tool(
         "sql_query",
         sql=(
             "SELECT type, name FROM sqlite_master WHERE type IN ('table',"
             " 'view') AND name NOT LIKE 'sqlite_%'"
         ),
     )
+    self.assertIsInstance(entities_res, dict)
+    self.assertTrue(entities_res["ok"])
+    entities_after_ea_change = entities_res["rows"]
     ea_entity_names = [e["name"] for e in entities_after_ea_change]
     print(
         "DEBUG: Entities after image_min_ea mismatch migration:"
@@ -3281,10 +3275,13 @@ print("DEBUG: Corrupted image_min_ea to 0x12345 and reset checked flag")
       self.assertNotIn(ent, ea_entity_names)
 
     # Verify metadata was updated back to current image_min_ea
-    meta_rows_updated = await self.run_tool(
+    meta_res_updated = await self.run_tool(
         "sql_query",
         sql="SELECT value FROM _db_metadata WHERE key = 'image_min_ea'",
     )
+    self.assertIsInstance(meta_res_updated, dict)
+    self.assertTrue(meta_res_updated["ok"])
+    meta_rows_updated = meta_res_updated["rows"]
     self.assertEqual(len(meta_rows_updated), 1)
     updated_stored_ea = int(meta_rows_updated[0]["value"], 16)
     self.assertEqual(updated_stored_ea, stored_ea)
@@ -3346,8 +3343,10 @@ with q._db_write_lock:
 
     # Verify that sql_query works immediately after cancellation
     res = await self.run_tool("sql_query", sql="SELECT 1 AS test_val")
-    self.assertEqual(len(res), 1)
-    self.assertEqual(res[0]["test_val"], "0x1")
+    self.assertIsInstance(res, dict)
+    self.assertTrue(res["ok"])
+    self.assertEqual(len(res["rows"]), 1)
+    self.assertEqual(res["rows"][0]["test_val"], "0x1")
 
     # Verify that other tools still function cleanly
     meta = await self.run_tool("get_metadata")

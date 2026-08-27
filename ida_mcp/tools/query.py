@@ -33,7 +33,7 @@ import sqlite3
 import threading
 import time
 import traceback
-from typing import Any, Iterable, List, Tuple, Union
+from typing import Any, Iterable, Tuple
 import ida_auto
 import ida_idp
 import ida_kernwin
@@ -51,6 +51,7 @@ import idautils
 import idc
 from shared.config import load_config
 from shared.rpc import ToolError
+from shared.types import QueryResult
 
 _image_min_ea = 0
 _is_rebasing = False
@@ -741,7 +742,7 @@ _skip_string_updates = False
 @jsonrpc
 def sql_query(
     queries: list[dict[str, Any]],
-) -> list[Union[List[dict[str, Any]], str]]:
+) -> list[QueryResult]:
   """Executes pre-rewritten read-only SQL queries against IDA Pro using SQLite.
 
   Args:
@@ -749,7 +750,7 @@ def sql_query(
       query string. - 'tables': A list of table names required by this query.
 
   Returns:
-    A list of query results (one per input query in the batch).
+    A list of QueryResult objects (one per input query in the batch).
   """
   if _db_initialized or not init_tables():
     _db_update_queue.join()
@@ -761,7 +762,7 @@ def sql_query(
     )
 
   global _skip_string_updates
-  results = []
+  results: list[QueryResult] = []
   for item in queries:
     q = item.get("sql", "").strip()
     if not q:
@@ -803,7 +804,7 @@ def sql_query(
       with interruptible_sqlite(conn):
         cursor = conn.execute(q)
         if not cursor.description:
-          results.append("Query executed successfully.")
+          results.append(QueryResult(ok=True, rows=[]))
           continue
 
         rows = cursor.fetchall()
@@ -816,9 +817,15 @@ def sql_query(
           if isinstance(v, int):
             row_dict[k] = f"{v & 0xFFFFFFFFFFFFFFFF:#x}"
         res.append(row_dict)
-      results.append(res)
+      results.append(QueryResult(ok=True, rows=res))
     except Exception as e:
-      results.append(f"Error executing SQL: {str(e)}\n{traceback.format_exc()}")
+      results.append(
+          QueryResult(
+              ok=False,
+              rows=[],
+              error=f"Error executing SQL: {str(e)}\n{traceback.format_exc()}",
+          )
+      )
 
   return results
 
