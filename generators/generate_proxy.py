@@ -219,6 +219,7 @@ FIRST_PART = """# Copyright (c) 2026 Google LLC
 
 # WARNING: This file is generated, DO NOT edit it directly.
 import argparse
+import contextlib
 from typing import Annotated, Any, Dict, List, Literal
 from gateway.forward import forward_to, mcp_server, mcp_tool
 from shared.config import load_config
@@ -267,9 +268,11 @@ if __name__ == "__main__":
     port = (
         args.port if args.port is not None else config.get("proxy_port", 8000)
     )
-    mcp_server.run(transport=args.transport, host=host, port=port)
+    with contextlib.suppress(KeyboardInterrupt):
+      mcp_server.run(transport=args.transport, host=host, port=port)
   else:
-    mcp_server.run(transport="stdio")
+    with contextlib.suppress(KeyboardInterrupt):
+      mcp_server.run(transport="stdio")
 """
 
 
