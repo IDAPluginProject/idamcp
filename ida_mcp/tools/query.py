@@ -330,10 +330,8 @@ def _recreate_and_insert(
         # the ROLLBACK action from completing.
 
         if conn.in_transaction:
-          try:
+          with contextlib.suppress(sqlite3.Error):
             conn.execute("ROLLBACK")
-          except sqlite3.Error:
-            pass
 
 
 def _table_exists(table_name: str) -> bool:
@@ -391,8 +389,8 @@ def _get_func_info(func_ea: int) -> FuncInfo | None:
       start_ea=_to_signed_64(bounds.start_ea),
       end_ea=_to_signed_64(bounds.end_ea),
       name=func_name,
-      demangled_name=demangled if demangled else None,
-      prototype=proto if proto else None,
+      demangled_name=demangled or None,
+      prototype=proto or None,
       size=func_size,
   )
 
@@ -519,7 +517,7 @@ def populate_imports():
       # Callback closure.
       # pylint: disable=cell-var-from-loop
       def imp_cb(ea, name, ordinal):
-        symbol_name = name if name else f"#{ordinal}"
+        symbol_name = name or f"#{ordinal}"
         module_imports.append((
             _to_signed_64(ea),
             symbol_name,
@@ -616,7 +614,7 @@ def _get_local_type_info(ordinal: int) -> LocalTypeInfo | None:
   return LocalTypeInfo(
       ordinal=ordinal,
       name=type_name,
-      declaration=c_decl_output if c_decl_output else None,
+      declaration=c_decl_output or None,
   )
 
 
@@ -753,9 +751,7 @@ def sql_query(
   Returns:
     A list of query results (one per input query in the batch).
   """
-  if not _db_initialized:
-    init_tables()
-  else:
+  if _db_initialized or not init_tables():
     _db_update_queue.join()
 
   if _is_rebasing:
@@ -1262,12 +1258,19 @@ def _signal_handler(sig, frame):
 
 
 @idaread
-def init_tables() -> None:
-  """Initializes the background worker and IDB hooks."""
+def init_tables() -> bool:
+  """Initializes the background worker and IDB hooks.
+
+  Returns:
+    True if the tables and hooks were newly initialized by this call, or False
+    if initialization was already completed.
+  """
   global _db_initialized, _db_hooks, _db_idp_hooks, _worker_thread
   global _image_min_ea
+
   if _db_initialized:
-    return
+    return False
+
   _image_min_ea = idaapi.inf_get_min_ea()
   _worker_thread = threading.Thread(target=_db_worker, daemon=True)
   _worker_thread.start()
@@ -1284,12 +1287,15 @@ def init_tables() -> None:
       _handlers[sig] = signal.signal(sig, _signal_handler)
     except Exception as e:  # pylint: disable=broad-exception-caught
       logging.exception("Could not register handler for signal %s: %s", sig, e)
+
   _db_hooks = DBUpdateHooks()
   _db_hooks.hook()
   _db_idp_hooks = DBUpdateIDPHooks()
   _db_idp_hooks.hook()
-  _db_initialized = True
 
   config = load_config()
   if config.get("populate_tables_on_startup"):
     _populate_tables()
+
+  _db_initialized = True
+  return True
