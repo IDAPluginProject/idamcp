@@ -368,7 +368,7 @@ def get_xrefs_to(
   """Get all cross references to the given address."""
   xrefs = []
   xref: ida_xref.xrefblk_t
-  for xref in idautils.XrefsTo(helper.parse_and_check_ea(address)):  # type: ignore (IDA SDK type hints are incorrect)
+  for xref in idautils.XrefsTo(helper.parse_int(address)):  # type: ignore (IDA SDK type hints are incorrect)
     xr = Xref(
         address=hex(xref.frm),
         type="code" if xref.iscode else "data",

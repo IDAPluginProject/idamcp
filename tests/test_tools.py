@@ -302,6 +302,7 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
         self.verify_get_xrefs_to,
         self.verify_get_data_xrefs_from,
         self.verify_get_xrefs_to_field,
+        self.verify_get_xrefs_to_tid,
         self.verify_get_callees,
         self.verify_get_callers,
         self.verify_get_entry_points,
@@ -845,6 +846,62 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(xref["function"]["size"], expected["function"]["size"])
       else:
         self.assertIsNone(xref["function"])
+
+  async def verify_get_xrefs_to_tid(self):
+    # Retrieve tid for TestStruct.a
+    eval_tid_code = """
+import ida_typeinf
+tif = ida_typeinf.tinfo_t()
+tid = None
+if tif.get_named_type(None, "TestStruct"):
+  if hasattr(ida_typeinf, "get_udm_by_fullname"):
+    idx = ida_typeinf.get_udm_by_fullname(None, "TestStruct.a")
+    if idx != -1 and hasattr(tif, "get_udm_tid"):
+      tid = tif.get_udm_tid(idx)
+if tid is None:
+  try:
+    import ida_struct
+    sid = ida_struct.get_struc_id("TestStruct")
+    sptr = ida_struct.get_struc(sid)
+    mptr = ida_struct.get_member_by_name(sptr, "a")
+    tid = mptr.id
+  except ImportError:
+    pass
+hex(tid) if tid is not None else ""
+"""
+    eval_res = await self.run_tool("idapython_eval", code=eval_tid_code)
+    tid_hex = eval_res["result"].strip("'\"")
+    self.assertTrue(tid_hex.startswith("0x"))
+
+    # Load golden data for TestStruct.a
+    golden_path = os.path.join("tests", "golden_data.json")
+    with open(golden_path, "r") as f:
+      golden = json.load(f)["xrefs_to_field"]["TestStruct.a"]
+
+    # Verify get_xrefs_to with hex tid
+    result_hex = await self.run_tool("get_xrefs_to", address=tid_hex)
+    self.assertIsInstance(result_hex, list)
+    self.assertEqual(len(result_hex), len(golden))
+
+    golden_map = {x["address"]: x for x in golden}
+    for xref in result_hex:
+      self.assertIn(xref["address"], golden_map)
+      expected = golden_map[xref["address"]]
+      self.assertEqual(xref["type"], expected["type"])
+      if expected["function"]:
+        self.assertIsNotNone(xref["function"])
+        self.assertEqual(
+            xref["function"]["address"], expected["function"]["address"]
+        )
+        self.assertEqual(xref["function"]["name"], expected["function"]["name"])
+        self.assertEqual(xref["function"]["size"], expected["function"]["size"])
+      else:
+        self.assertIsNone(xref["function"])
+
+    # Verify get_xrefs_to with decimal tid
+    tid_dec = str(int(tid_hex, 16))
+    result_dec = await self.run_tool("get_xrefs_to", address=tid_dec)
+    self.assertEqual(result_dec, result_hex)
 
   async def verify_get_callees(self):
     # Load golden data
