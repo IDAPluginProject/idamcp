@@ -109,14 +109,11 @@ def _get_db_path_and_uri() -> Tuple[str, bool]:
       import ida_loader
 
       idb_path = ida_loader.get_path(ida_loader.PATH_TYPE_IDB)
-  if idb_path is not None:
+  if idb_path is not None and (
+      config.get("sqlite_persistent") or config.get("duckdb_persistent")
+  ):
     path = pathlib.Path(idb_path).with_suffix(".db")
-    if (
-        config.get("sqlite_persistent")
-        or config.get("duckdb_persistent")
-        or path.is_file()
-    ):
-      return str(path), False
+    return str(path), False
 
   # Default to shared memory if not persistent
   return "file:memdb?mode=memory&cache=shared", True
@@ -752,14 +749,14 @@ def sql_query(
   Returns:
     A list of QueryResult objects (one per input query in the batch).
   """
-  if _db_initialized or not init_tables():
-    _db_update_queue.join()
-
   if _is_rebasing:
     raise ToolError(
         "Database is currently undergoing rebase and auto-analysis. Please wait"
         " for reanalysis to complete before querying."
     )
+
+  if _db_initialized or not init_tables():
+    _db_update_queue.join()
 
   global _skip_string_updates
   results: list[QueryResult] = []
@@ -804,7 +801,7 @@ def sql_query(
       with interruptible_sqlite(conn):
         cursor = conn.execute(q)
         if not cursor.description:
-          results.append(QueryResult(ok=True, rows=[]))
+          results.append(QueryResult(rows=[]))
           continue
 
         rows = cursor.fetchall()
@@ -817,13 +814,11 @@ def sql_query(
           if isinstance(v, int):
             row_dict[k] = f"{v & 0xFFFFFFFFFFFFFFFF:#x}"
         res.append(row_dict)
-      results.append(QueryResult(ok=True, rows=res))
+      results.append(QueryResult(rows=res))
     except Exception as e:
       results.append(
           QueryResult(
-              ok=False,
-              rows=[],
-              error=f"Error executing SQL: {str(e)}\n{traceback.format_exc()}",
+              error=f"Error executing SQL: {str(e)}\n{traceback.format_exc()}"
           )
       )
 

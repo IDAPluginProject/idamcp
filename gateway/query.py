@@ -298,11 +298,9 @@ def adjust_query(parsed: Any) -> str:
 
 def _to_query_result(res: dict[str, Any]) -> QueryResult:
   """Constructs a QueryResult from a dictionary received over RPC."""
-  return QueryResult(
-      ok=res.get("ok", True),
-      rows=res.get("rows", []),
-      error=res.get("error"),
-  )
+  if res.get("error"):
+    return QueryResult(error=str(res["error"]))
+  return QueryResult(rows=res.get("rows", []))
 
 
 @mcp_tool
@@ -377,10 +375,9 @@ async def sql_query(
 
   Returns:
     A QueryResult object if a single query was provided, or a list of
-    QueryResult objects (one per input query). Each QueryResult contains 'ok'
-    (bool), 'rows' (list of dicts with hexadecimal string formatting for
-    integers), and 'error' (error message string if failed, or None on
-    success).
+    QueryResult objects (one per input query). Each QueryResult contains 'rows'
+    (list of dicts with hexadecimal string formatting for integers) on success,
+    or 'error' (error message string) if the query failed.
   """
   queries_input = sql if isinstance(sql, list) else [sql]
   results: list[QueryResult] = []
@@ -404,12 +401,10 @@ async def sql_query(
         ):
           current_results.append(
               QueryResult(
-                  ok=False,
-                  rows=[],
                   error=(
                       "Error: Only read-only queries (SELECT, DESCRIBE, etc.)"
                       " are allowed."
-                  ),
+                  )
               )
           )
           continue
@@ -440,9 +435,7 @@ async def sql_query(
     except Exception as e:
       results.append(
           QueryResult(
-              ok=False,
-              rows=[],
-              error=f"Error executing SQL: {str(e)}\n{traceback.format_exc()}",
+              error=f"Error executing SQL: {str(e)}\n{traceback.format_exc()}"
           )
       )
 

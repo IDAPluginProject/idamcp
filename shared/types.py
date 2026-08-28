@@ -429,12 +429,12 @@ class BatchResponseItem(TypedDict):
   ]
 
 
-@dataclass
-class QueryResult:
-  ok: Annotated[bool, "Whether the query executed successfully"]
-  rows: Annotated[
-      list[dict[str, Any]], "The query result rows (empty list if no rows)"
-  ] = field(default_factory=list)
-  error: Annotated[
-      str | None, "Error message if the query failed, or None on success"
-  ] = None
+class QueryResult(TypedDict):
+  rows: NotRequired[
+      Annotated[
+          list[dict[str, Any]], "The query result rows (empty list if no rows)"
+      ]
+  ]
+  error: NotRequired[
+      Annotated[str, "Error message if the query failed (omitted on success)"]
+  ]
