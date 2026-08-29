@@ -32,6 +32,9 @@ class TestConfig(unittest.TestCase):
   def setUp(self):
     shared.config.load_config.cache_clear()
 
+  def tearDown(self):
+    shared.config.load_config.cache_clear()
+
   @mock.patch("shared.config.sys.platform", "linux")
   def test_linux_default(self):
     """Test default configuration on Linux."""
