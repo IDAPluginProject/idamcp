@@ -542,52 +542,78 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
       self.assertEqual(imp["module"], golden[offset + i]["module"])
 
   async def verify_list_strings(self):
-    # Load golden data
-    golden_path = os.path.join("tests", "golden_data.json")
-    with open(golden_path, "r") as f:
-      golden = json.load(f)["strings"]
-
-    # 1. Test default listing
-    result = await self.run_tool("list_strings")
-    self.assertIsInstance(result, dict)
-    self.assertIn("data", result)
-    self.assertEqual(len(result["data"]), len(golden))
-    for i, s in enumerate(result["data"]):
-      self.assertEqual(s["address"], golden[i]["address"])
-      self.assertEqual(s["length"], golden[i]["length"])
-      self.assertEqual(s["string"], golden[i]["string"])
-
-    # 2. Test pagination
-    offset = 5
-    count = 5
-    result_paginated = await self.run_tool(
-        "list_strings", offset=offset, count=count
+    # Save original string options and set to default
+    save_code = (
+        "import ida_strlist\nimport idautils\nopt ="
+        " ida_strlist.get_strlist_options()\n_saved_strlist_opt = {\n   "
+        " 'strtypes': list(opt.strtypes),\n    'minlen': opt.minlen,\n   "
+        " 'only_7bit': opt.only_7bit,\n    'display_only_existing_strings':"
+        " opt.display_only_existing_strings,\n    'ignore_heads':"
+        " opt.ignore_heads,\n}\nidautils.Strings(default_setup=True)\n"
     )
-    self.assertEqual(len(result_paginated["data"]), count)
-    for i, s in enumerate(result_paginated["data"]):
-      self.assertEqual(s["address"], golden[offset + i]["address"])
-      self.assertEqual(s["length"], golden[offset + i]["length"])
-      self.assertEqual(s["string"], golden[offset + i]["string"])
+    await self.run_tool("idapython_eval", code=save_code)
 
-    # 3. Test filtering
-    result_filtered = await self.run_tool("list_strings", regex_filter="lib")
-    expected_strings = {
-        "/lib64/ld-linux-x86-64.so.2",
-        "_ZSt21ios_base_library_initv",
-        "__libc_start_main",
-        "libstdc++.so.6",
-        "libm.so.6",
-        "libgcc_s.so.1",
-        "libc.so.6",
-        "GLIBCXX_3.4.32",
-        "GLIBCXX_3.4",
-        "GLIBC_2.14",
-        "GLIBC_2.34",
-        "GLIBC_2.2.5",
-    }
-    self.assertEqual(len(result_filtered["data"]), 12)
-    for s in result_filtered["data"]:
-      self.assertIn(s["string"], expected_strings)
+    try:
+      # Load golden data
+      golden_path = os.path.join("tests", "golden_data.json")
+      with open(golden_path, "r") as f:
+        golden = json.load(f)["strings"]
+
+      # 1. Test default listing
+      result = await self.run_tool("list_strings")
+      self.assertIsInstance(result, dict)
+      self.assertIn("data", result)
+      self.assertEqual(len(result["data"]), len(golden))
+      for i, s in enumerate(result["data"]):
+        self.assertEqual(s["address"], golden[i]["address"])
+        self.assertEqual(s["length"], golden[i]["length"])
+        self.assertEqual(s["string"], golden[i]["string"])
+
+      # 2. Test pagination
+      offset = 5
+      count = 5
+      result_paginated = await self.run_tool(
+          "list_strings", offset=offset, count=count
+      )
+      self.assertEqual(len(result_paginated["data"]), count)
+      for i, s in enumerate(result_paginated["data"]):
+        self.assertEqual(s["address"], golden[offset + i]["address"])
+        self.assertEqual(s["length"], golden[offset + i]["length"])
+        self.assertEqual(s["string"], golden[offset + i]["string"])
+
+      # 3. Test filtering
+      result_filtered = await self.run_tool("list_strings", regex_filter="lib")
+      expected_strings = {
+          "/lib64/ld-linux-x86-64.so.2",
+          "_ZSt21ios_base_library_initv",
+          "__libc_start_main",
+          "libstdc++.so.6",
+          "libm.so.6",
+          "libgcc_s.so.1",
+          "libc.so.6",
+          "GLIBCXX_3.4.32",
+          "GLIBCXX_3.4",
+          "GLIBC_2.14",
+          "GLIBC_2.34",
+          "GLIBC_2.2.5",
+      }
+      self.assertEqual(len(result_filtered["data"]), 12)
+      for s in result_filtered["data"]:
+        self.assertIn(s["string"], expected_strings)
+    finally:
+      restore_code = (
+          "import ida_strlist\n"
+          "if '_saved_strlist_opt' in globals():\n"
+          "    opt = ida_strlist.get_strlist_options()\n"
+          "    opt.strtypes = _saved_strlist_opt['strtypes']\n"
+          "    opt.minlen = _saved_strlist_opt['minlen']\n"
+          "    opt.only_7bit = _saved_strlist_opt['only_7bit']\n"
+          "    opt.display_only_existing_strings ="
+          " _saved_strlist_opt['display_only_existing_strings']\n"
+          "    opt.ignore_heads = _saved_strlist_opt['ignore_heads']\n"
+          "    ida_strlist.build_strlist()\n"
+      )
+      await self.run_tool("idapython_eval", code=restore_code)
 
   async def verify_get_operand(self):
     # Load golden data
