@@ -62,18 +62,22 @@ def set_keepalive(sock):
     return
   try:
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-    # Linux specific keepalive settings
-    if hasattr(socket, "TCP_KEEPIDLE"):
-      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)  # 10s idle
-      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 5)  # 5s intvl
-      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)  # 3 failures
+    if sys.platform == "win32" and hasattr(socket, "SIO_KEEPALIVE_VALS"):
+      # asyncio TransportSocket wraps the real socket in _sock and doesn't expose ioctl.
+      ioctl_sock = (
+          sock if hasattr(sock, "ioctl") else getattr(sock, "_sock", None)
+      )
+      if ioctl_sock and hasattr(ioctl_sock, "ioctl"):
+        ioctl_sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, 10000, 5000))
     elif sys.platform == "darwin":
       # macOS
       TCP_KEEPALIVE = 0x10
       sock.setsockopt(socket.IPPROTO_TCP, TCP_KEEPALIVE, 10)
-    elif sys.platform == "win32" and hasattr(socket, "SIO_KEEPALIVE_VALS"):
-      # Windows: (onoff, timeout_ms, interval_ms)
-      sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, 10000, 5000))
+    elif hasattr(socket, "TCP_KEEPIDLE"):
+      # Linux specific keepalive settings
+      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)  # 10s idle
+      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 5)  # 5s intvl
+      sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)  # 3 failures
   except Exception as e:
     logger.warning("Failed to set keepalive: %s", e)
 
