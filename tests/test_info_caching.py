@@ -43,6 +43,7 @@ MOCKED_MODULES = [
     "ida_ida",
     "idautils",
     "idc",
+    "ida_name",
 ]
 
 module_mocks = {}
@@ -295,8 +296,8 @@ class TestInfoCaching(unittest.TestCase):
     mock_strings = [
         MockStringItem(0x3000 + i * 16, f"string_{i}") for i in range(100)
     ]
-    sys.modules["idautils"].Strings.side_effect = lambda: MockStringsList(
-        mock_strings
+    sys.modules["idautils"].Strings.side_effect = (
+        lambda *args, **kwargs: MockStringsList(mock_strings)
     )
 
     # 1. Page 1
@@ -338,8 +339,8 @@ class TestInfoCaching(unittest.TestCase):
       s_val = f"secret_{i}" if i < 10 else f"public_{i}"
       mock_strings.append(MockStringItem(0x3000 + i, s_val))
 
-    sys.modules["idautils"].Strings.side_effect = lambda: MockStringsList(
-        mock_strings
+    sys.modules["idautils"].Strings.side_effect = (
+        lambda *args, **kwargs: MockStringsList(mock_strings)
     )
 
     # Filter for "secret" -> Should get 10 items

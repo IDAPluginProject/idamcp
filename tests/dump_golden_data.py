@@ -449,7 +449,7 @@ def dump_imports() -> list:
 def dump_strings() -> list:
   """Extracts static string literals."""
   strings = []
-  for item in idautils.Strings():
+  for item in idautils.Strings(default_setup=True):
     if item is None:
       continue
     string_val = str(item)
