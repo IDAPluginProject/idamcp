@@ -22,8 +22,10 @@
 
 import atexit
 import json
+import logging
 import os
 import pathlib
+import tempfile
 from typing import Any
 
 
@@ -41,7 +43,7 @@ class RegistryManager:
       address: str | int,
       name: str,
       metadata: dict[str, Any] | None = None,
-  ) -> pathlib.Path:
+  ) -> pathlib.Path | None:
     """Register a backend.
 
     Args:
@@ -62,10 +64,18 @@ class RegistryManager:
         "name": name,
         "metadata": metadata or {},
     }
-
     file_path = self.registry_dir / f"{name}.json"
-    with open(file_path, "w") as f:
-      json.dump(data, f)
+
+    try:
+      with tempfile.NamedTemporaryFile(
+          mode="w", dir=str(self.registry_dir), delete=False
+      ) as temp_file:
+        json.dump(data, temp_file)
+        temp_path = temp_file.name
+      os.replace(temp_path, file_path)
+    except Exception as e:
+      logging.exception("Failed to write registry file: %s", e)
+      return None
     self.current_file = file_path
 
     # Register cleanup

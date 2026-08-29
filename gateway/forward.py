@@ -45,9 +45,10 @@ from shared.rpc import RPCClient
 from shared.rpc import RPCError
 from shared.types import Metadata
 from watchdog.events import (
-    DirModifiedEvent,
-    FileClosedEvent,
-    FileModifiedEvent,
+    DirDeletedEvent,
+    DirMovedEvent,
+    FileDeletedEvent,
+    FileMovedEvent,
     FileSystemEventHandler,
 )
 from watchdog.observers import Observer
@@ -379,29 +380,15 @@ async def connect_to_backend(registry_file: pathlib.Path, mtime: float) -> None:
   if backend_id in _global_clients:
     await disconnect_backend(backend_id)
 
-  # We received the notification before the backend server is fully up, so we
-  # need to give it a little time to initialize
-  await asyncio.sleep(2)
-
   data = None
   try:
     # Read registry file with retry logic (in case it's being written)
-    for _ in range(5):
-      with contextlib.suppress(Exception):
-        if registry_file.exists():
-          with open(registry_file, "r", encoding="utf-8") as f:
-            if os.fstat(f.fileno()).st_mtime != mtime:
-              # file has been changed, abort the operation
-              logging.warning(
-                  "[Gateway] JSON has been changed while waiting, aborting the"
-                  " operation."
-              )
-              return
-            content = f.read().strip()
-            if content:
-              data = json.loads(content)
-              break
-      await asyncio.sleep(0.2)
+    with contextlib.suppress(Exception):
+      if registry_file.exists():
+        with open(registry_file, "r", encoding="utf-8") as f:
+          content = f.read().strip()
+          if content:
+            data = json.loads(content)
     if not data:
       logging.error("[Gateway] Could not read registry file %s", registry_file)
       return
@@ -422,7 +409,7 @@ async def connect_to_backend(registry_file: pathlib.Path, mtime: float) -> None:
     client = RPCClient()
     async with _global_client_state[backend_id].condition:
       # Retry connection logic
-      for i in range(10):
+      for i in range(3):
         try:
           if channel == "tcp":
             logging.info(
@@ -448,11 +435,10 @@ async def connect_to_backend(registry_file: pathlib.Path, mtime: float) -> None:
             return
           break
         except Exception as e:  # pylint: disable=broad-exception-caught
-          if i == 9:
+          if i == 2:
             raise e
           await asyncio.sleep(0.5)
 
-      await asyncio.sleep(2)
       # Reset the closed state for new connections under the same ID
       _global_clients[backend_id] = client
       _global_metadata[backend_id] = metadata  # type: ignore
@@ -535,45 +521,40 @@ class RegistryEventHandler(FileSystemEventHandler):
     super().__init__()
     self.loop = loop
 
-  def _handle_event(
-      self, event: DirModifiedEvent | FileModifiedEvent | FileClosedEvent
-  ) -> None:
-    if isinstance(event.src_path, bytes):
-      src_path = event.src_path.decode()
-    else:
-      src_path = event.src_path
-
-    if (
-        not event.is_directory
-        and src_path.endswith(".json")
-        and os.path.isfile(src_path)
-    ):
+  def _handle_event_by_path(self, path: str) -> None:
+    if path.endswith(".json") and os.path.isfile(path):
       try:
-        mtime = os.stat(src_path).st_mtime
+        mtime = os.stat(path).st_mtime
       except OSError:
-        logging.exception("Failed to stat %s", src_path)
+        logging.exception("Failed to stat %s", path)
         return
       asyncio.run_coroutine_threadsafe(
-          connect_to_backend(pathlib.Path(src_path), mtime), self.loop
+          connect_to_backend(pathlib.Path(path), mtime), self.loop
       )
 
-  def on_closed(self, event: FileClosedEvent) -> None:
-    logging.debug("on_closed: %s", event.src_path)
-    # macOS doesn't issue this event.
-    self._handle_event(event)
+  def on_moved(self, event: DirMovedEvent | FileMovedEvent) -> None:
+    if event.is_directory:
+      return
 
-  def on_modified(self, event: DirModifiedEvent | FileModifiedEvent) -> None:
-    logging.debug("on_modified: %s", event.src_path)
-    if sys.platform == "darwin":
-      self._handle_event(event)
+    logging.debug("on_moved: %s -> %s", event.src_path, event.dest_path)
+    if isinstance(event.dest_path, bytes):
+      path = event.dest_path.decode()
+    else:
+      path = event.dest_path
 
-  def on_deleted(self, event):
+    if path.endswith(".json"):
+      self._handle_event_by_path(path)
+
+  def on_deleted(self, event: DirDeletedEvent | FileDeletedEvent):
+    if event.is_directory:
+      return
+
     if isinstance(event.src_path, bytes):
       src_path = event.src_path.decode()
     else:
       src_path = event.src_path
     logging.debug("on_deleted: %s", event.src_path)
-    if not event.is_directory and src_path.endswith(".json"):
+    if src_path.endswith(".json"):
       asyncio.run_coroutine_threadsafe(
           disconnect_backend(pathlib.Path(src_path).stem), self.loop
       )
