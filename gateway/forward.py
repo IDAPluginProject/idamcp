@@ -198,11 +198,11 @@ class HeadlessManager:
           os.kill(pid, sig)
 
         # Wait a bit for graceful shutdown
-        for _ in range(10):
-          await asyncio.sleep(2)
+        for _ in range(20):
           if not _is_process_running(pid):
             logging.info("[HeadlessManager] Process %d exited gracefully", pid)
             break
+          await asyncio.sleep(1)
         else:
           # Still running, force kill
           logging.warning(
@@ -500,6 +500,24 @@ async def disconnect_backend(backend_id: str, unregister: bool = True) -> None:
       _global_metadata.pop(backend_id, None)
     try:
       if client:
+        # If it is a headless instance opened by us, request graceful shutdown first
+        if _global_database_id_to_pid.get(backend_id) is not None:
+          try:
+            logging.info(
+                "[Gateway] Requesting graceful database close for %s",
+                backend_id,
+            )
+            await asyncio.wait_for(
+                client.call(method="close_database", params={}),
+                timeout=5.0,
+            )
+          except Exception as e:
+            logging.exception(
+                "[Gateway] Failed to request close_database for %s: %s",
+                backend_id,
+                e,
+            )
+
         logging.info("[Gateway] Closing RPC client for %s", backend_id)
         await client.close()
     except Exception as e:  # pylint: disable=broad-exception-caught

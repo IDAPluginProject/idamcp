@@ -22,7 +22,9 @@
 
 """Configuration and management for IDA Pro MCP tools."""
 
+import logging
 from typing import Any, Dict, List
+from ida_mcp.core import ida_thread
 from ida_mcp.core.decorators import internal, jsonrpc
 from ida_mcp.core.rpc_registry import rpc_registry
 from ida_mcp.core.security import security_manager
@@ -67,3 +69,13 @@ def get_security_config() -> Dict[str, Any]:
       "enable_all_unsafe_tools": security_manager.enable_all_unsafe_tools,
       "enabled_unsafe_tools": list(security_manager.enabled_unsafe_tools),
   }
+
+
+@internal
+@jsonrpc
+def close_database() -> None:
+  """Closes the current database gracefully and exits the headless instance."""
+  logging.getLogger("ida_mcp.tools.config").info(
+      "Received close_database RPC call. Stopping loop..."
+  )
+  ida_thread.stop()
