@@ -147,7 +147,15 @@ python3 install.py plugin
 
 # c. Install the dependencies
 python3 -m venv venv_idamcp
+
+# Activate the virtual environment:
+# On Linux / macOS:
 source venv_idamcp/bin/activate
+# On Windows (Command Prompt):
+venv_idamcp\Scripts\activate.bat
+# On Windows (PowerShell):
+venv_idamcp\Scripts\activate.ps1
+
 python3 -m pip install -r requirements.txt
 
 # d. Install IDA Python library module, please update the path accordingly
