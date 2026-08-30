@@ -39,26 +39,58 @@ logger = logging.getLogger(__name__)
 _loop_running = threading.Event()
 
 
+def _safe_set_result(fut: asyncio.Future, val: Any) -> None:
+  if not fut.done():
+    fut.set_result(val)
+
+
+def _safe_set_exception(fut: asyncio.Future, exc: BaseException) -> None:
+  if not fut.done():
+    fut.set_exception(exc)
+
+
 class IDATask:
   """Represents a task to be executed on the IDA main thread."""
 
-  def __init__(self, func: Callable[[], Any]):
+  def __init__(
+      self,
+      func: Callable[[], Any],
+      loop: asyncio.AbstractEventLoop | None = None,
+      future: asyncio.Future | None = None,
+      event: threading.Event | None = None,
+  ):
     self.func = func
-    self.event = threading.Event()
+    self.loop = loop
+    self.future = future
+    self.event = event
     self.error: BaseException | None = None
 
   def __call__(self):
     # pylint: disable=broad-exception-caught
+    if self.future and self.future.cancelled():
+      if self.event is not None:
+        self.event.set()
+      return
+
     try:
-      self.func()
-    except (Exception, asyncio.CancelledError) as e:
+      res = self.func()
+      if self.loop and self.future:
+        self.loop.call_soon_threadsafe(_safe_set_result, self.future, res)
+    except BaseException as e:
       self.error = e
+      if self.loop and self.future:
+        self.loop.call_soon_threadsafe(_safe_set_exception, self.future, e)
     finally:
-      self.event.set()
+      if self.event is not None:
+        self.event.set()
 
   def cancel(self):
-    self.error = RuntimeError("IDA worker thread loop stopped.")
-    self.event.set()
+    err = RuntimeError("IDA worker thread loop stopped.")
+    self.error = err
+    if self.loop and self.future:
+      self.loop.call_soon_threadsafe(_safe_set_exception, self.future, err)
+    if self.event is not None:
+      self.event.set()
 
 
 _ida_queue: queue.Queue[IDATask | str] = queue.Queue()
@@ -130,9 +162,37 @@ def execute_sync(
   del unused_safety_mode
   if not _loop_running.is_set():
     raise RuntimeError("IDA worker thread loop is not running.")
-
-  task = IDATask(func)
+  event = threading.Event()
+  task = IDATask(func, event=event)
   _ida_queue.put(task)
-  task.event.wait()
+  event.wait()
   if task.error:
     raise task.error
+
+
+async def execute_async(
+    func: Callable[[], Any],
+    unused_safety_mode: int = 0,
+) -> Any:
+  """Asynchronously executes a task on the IDA worker thread.
+
+  Args:
+    func: The function to execute in the IDA thread.
+    unused_safety_mode: Ignored in headless mode.
+
+  Returns:
+    The return value of the executed function.
+
+  Raises:
+    RuntimeError: If the IDA worker thread loop is not running.
+    Exception: If the executed function raises an exception.
+  """
+  del unused_safety_mode
+  if not _loop_running.is_set():
+    raise RuntimeError("IDA worker thread loop is not running.")
+
+  loop = asyncio.get_running_loop()
+  future = loop.create_future()
+  task = IDATask(func, loop=loop, future=future)
+  _ida_queue.put(task)
+  return await future

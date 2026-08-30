@@ -21,6 +21,7 @@
 
 """Module for registering and managing JSON-RPC methods."""
 
+import contextlib
 import re
 from typing import Callable
 from shared.config import load_config
@@ -44,11 +45,9 @@ class RPCRegistry:
 
     disabled_tools = self._config.get("disabled_tools", [])
     for pattern in disabled_tools:
-      try:
+      with contextlib.suppress(Exception):
         if re.search(pattern, func.__name__, re.IGNORECASE):
           return func
-      except Exception:  # pylint: disable=broad-exception-caught
-        pass
 
     self.methods.add(func)
     if getattr(func, "unsafe", False):

@@ -25,11 +25,11 @@ import asyncio
 import enum
 import functools
 import logging
-import sys
 from typing import Any, Callable
 
 import ida_kernwin
 from ida_mcp.core import ida_thread
+from ida_mcp.core.decorators import cancellation_profile
 from ida_mcp.core.decorators import get_cancellation_token
 import idaapi
 import idc
@@ -49,95 +49,129 @@ class IDASafety(enum.IntEnum):
   SAFE_WRITE = ida_kernwin.MFF_WRITE
 
 
-def sync_wrapper(ff: Callable[[], Any], safety_mode: IDASafety) -> Any:
-  """Call a function ff with a specific IDA safety_mode."""
-  if safety_mode not in (IDASafety.SAFE_READ, IDASafety.SAFE_WRITE):
-    error_str = "Invalid safety mode {} over function {}".format(
-        safety_mode, ff.__name__
-    )
-    logger.error(error_str)
-    raise IDASyncError(error_str)
+class _IDACall:
+  """Helper to execute a callable on IDA's main thread with safety and cancellation checks."""
 
-  token = get_cancellation_token()
-  if token is not None and token.is_cancelled:
-    raise asyncio.CancelledError("Tool cancelled before execution")
-
-  if idaapi.is_main_thread():
-    old_batch = idc.batch(1)
-    try:
-      return ff()
-    finally:
-      idc.batch(old_batch)
-
-  result_tuple: tuple[bool, Any] = (
-      False,
-      IDASyncError(f"execute_sync silently failed to execute {ff.__name__}"),
-  )
-
-  @functools.wraps(ff)
-  def runned():
-    # pylint: disable=broad-exception-caught
-    nonlocal result_tuple
-    if token is not None and token.is_cancelled:
-      result_tuple = (
-          False,
-          asyncio.CancelledError("Tool cancelled before execution"),
+  def __init__(self, ff: Callable[[], Any], safety_mode: IDASafety):
+    if safety_mode not in (IDASafety.SAFE_READ, IDASafety.SAFE_WRITE):
+      error_str = "Invalid safety mode {} over function {}".format(
+          safety_mode, ff.__name__
       )
-      return
+      logger.error(error_str)
+      raise IDASyncError(error_str)
 
+    token = get_cancellation_token()
+    if token is not None and token.is_cancelled:
+      raise asyncio.CancelledError("Tool cancelled before execution")
+
+    self.ff = ff
+    self.safety_mode = safety_mode
+    self.token = token
+    self.success = False
+    self.result: Any = IDASyncError(
+        f"execute_sync silently failed to execute {ff.__name__}"
+    )
+
+    @functools.wraps(ff)
+    def runned() -> None:
+      # pylint: disable=broad-exception-caught
+      if token is not None and token.is_cancelled:
+        self.success = False
+        self.result = asyncio.CancelledError("Tool cancelled before execution")
+        return
+
+      old_batch = idc.batch(1)
+      try:
+        with cancellation_profile(token):
+          self.result = self.ff()
+          self.success = True
+      except BaseException as e:
+        self.success = False
+        self.result = e
+      finally:
+        idc.batch(old_batch)
+
+    self.runned = runned
+
+  def run_in_main(self) -> Any:
     old_batch = idc.batch(1)
-    old_profile = sys.getprofile()
-    if token is not None:
-
-      # We deliberately do not 'del' unused parameters to avoid emitting
-      # extra DELETE_FAST opcodes in this performance-critical hook.
-      def _ida_profile_func(unused_frame, unused_event, unused_arg) -> None:
-        if token.is_cancelled:
-          # Raising an exception automatically sets the profile function to
-          # None.
-          raise asyncio.CancelledError("Tool cancelled")
-
-      sys.setprofile(_ida_profile_func)
-
     try:
-      # Store a tuple: (Success_Boolean, Result_or_Exception)
-      result_tuple = (True, ff())
-    except (
-        Exception,
-        asyncio.CancelledError,
-    ) as e:
-      result_tuple = (False, e)
+      return self.ff()
     finally:
-      sys.setprofile(old_profile)
       idc.batch(old_batch)
 
-  if getattr(idaapi, "is_headless", False):
-    # Headless mode
-    ida_thread.execute_sync(runned, safety_mode)
-  else:
-    idaapi.execute_sync(runned, safety_mode)
+  def get_result(self) -> Any:
+    if not self.success:
+      raise self.result
+    return self.result
 
-  success, res = result_tuple
-  if not success:
-    raise res
-  return res
+  def execute_sync(self) -> Any:
+    if idaapi.is_main_thread():
+      return self.run_in_main()
+
+    if getattr(idaapi, "is_headless", False):
+      # Headless mode
+      ida_thread.execute_sync(self.runned, self.safety_mode)
+    else:
+      idaapi.execute_sync(self.runned, self.safety_mode)
+
+    return self.get_result()
+
+  async def execute_async(self) -> Any:
+    if idaapi.is_main_thread():
+      return self.run_in_main()
+
+    if getattr(idaapi, "is_headless", False):
+      await ida_thread.execute_async(self.runned, self.safety_mode)
+    else:
+      await asyncio.to_thread(
+          idaapi.execute_sync, self.runned, self.safety_mode
+      )
+
+    return self.get_result()
+
+
+def sync_wrapper(ff: Callable[[], Any], safety_mode: IDASafety) -> Any:
+  """Call a function ff with a specific IDA safety_mode synchronously."""
+  return _IDACall(ff, safety_mode).execute_sync()
+
+
+async def async_wrapper(ff: Callable[[], Any], safety_mode: IDASafety) -> Any:
+  """Call a function ff with a specific IDA safety_mode asynchronously."""
+  return await _IDACall(ff, safety_mode).execute_async()
 
 
 def _idasync(f: Callable[..., Any], mode: IDASafety) -> Callable[..., Any]:
-  """Wraps a callable to execute synchronously inside the IDA main thread."""
+  """Wraps a callable to execute inside the IDA main thread."""
 
   @functools.wraps(f)
   def wrapper(*args, **kwargs) -> Any:
+    ff = functools.partial(f, *args, **kwargs)
+    ff.__name__ = f.__name__  # type: ignore
+    try:
+      loop = asyncio.get_running_loop()
+    except RuntimeError:
+      loop = None
+
+    if loop is not None and loop.is_running():
+      return async_wrapper(ff, mode)
+    return sync_wrapper(ff, mode)
+
+  @functools.wraps(f)
+  def sync_call(*args, **kwargs) -> Any:
     ff = functools.partial(f, *args, **kwargs)
     ff.__name__ = f.__name__  # type: ignore
     return sync_wrapper(ff, mode)
 
   # Python 3.14 compatibility: manually copy annotations and signature
   wrapper.__annotations__ = getattr(f, "__annotations__", {})
+  sync_call.__annotations__ = wrapper.__annotations__
   if hasattr(f, "__signature__"):
     wrapper.__signature__ = f.__signature__  # type: ignore
+    sync_call.__signature__ = f.__signature__  # type: ignore
 
   wrapper.is_ida_tool = True  # type: ignore
+  wrapper.sync_call = sync_call  # type: ignore
   return wrapper
 
 

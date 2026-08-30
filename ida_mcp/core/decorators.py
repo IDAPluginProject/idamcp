@@ -144,6 +144,56 @@ def register_cancel_callback(cb: Callable[[], Any]):
     yield None
 
 
+def make_cancellation_profile_func(
+    token: CancellationToken,
+) -> Callable[[Any, str, Any], None]:
+  """Creates a profile function tagged as an ida_mcp canceller."""
+
+  def _profile_func(unused_frame, unused_event, unused_arg) -> None:
+    if token.is_cancelled:
+      # Raising an exception automatically sets the profile function to None.
+      raise asyncio.CancelledError("Tool cancelled")
+
+  _profile_func.is_ida_mcp_canceller = True  # type: ignore
+  _profile_func.token = token  # type: ignore
+  return _profile_func
+
+
+def is_ida_mcp_canceller(
+    func: Any, token: CancellationToken | None = None
+) -> bool:
+  """Fast check using direct attribute access."""
+  try:
+    return (
+        func is not None
+        and func.is_ida_mcp_canceller
+        and (token is None or func.token is token)
+    )
+  except AttributeError:
+    return False
+
+
+@contextlib.contextmanager
+def cancellation_profile(token: CancellationToken | None):
+  """Context manager that installs a cancellation profile hook idempotently."""
+  if token is None:
+    yield
+    return
+
+  curr = sys.getprofile()
+  if is_ida_mcp_canceller(curr, token):
+    # Already protected by an active cancellation hook for this exact token
+    yield
+    return
+
+  prof_func = make_cancellation_profile_func(token)
+  sys.setprofile(prof_func)
+  try:
+    yield
+  finally:
+    sys.setprofile(curr)
+
+
 def _unwrap_annotated(tp: Any) -> Any:
   """Unwrap Annotated types to retrieve underlying target type."""
   while get_origin(tp) is Annotated:
@@ -330,24 +380,7 @@ def jsonrpc(func: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(func)
     def _func(*args, **kwargs) -> Any:
       token = get_cancellation_token()
-      if token is not None:
-
-        # We deliberately do not 'del' unused parameters to avoid emitting
-        # extra DELETE_FAST opcodes in this performance-critical hook.
-        def _profile_func(unused_frame, unused_event, unused_arg) -> None:
-          if token.is_cancelled:
-            # Raising an exception automatically sets the profile function to
-            # None.
-            raise asyncio.CancelledError("Tool cancelled")
-
-        old_profile_func = sys.getprofile()
-
-        try:
-          sys.setprofile(_profile_func)
-          return func(*args, **kwargs)
-        finally:
-          sys.setprofile(old_profile_func)
-      else:
+      with cancellation_profile(token):
         return func(*args, **kwargs)
 
     _func.__signature__ = inspect.signature(func)  # type: ignore
@@ -361,6 +394,11 @@ def jsonrpc(func: Callable[..., Any]) -> Callable[..., Any]:
     cancel_token = CancellationToken()
     var_token = cancellation_token_var.set(cancel_token)
     try:
+      if getattr(rpc_func, "is_ida_tool", False):
+        result = validated_rpc_func(*args, **kwargs)
+        if inspect.isawaitable(result):
+          return await result
+        return result
       return await asyncio.to_thread(validated_rpc_func, *args, **kwargs)
     except asyncio.CancelledError:
       cancel_token.cancel()
@@ -371,7 +409,7 @@ def jsonrpc(func: Callable[..., Any]) -> Callable[..., Any]:
   wrapper.__signature__ = inspect.signature(func)  # type: ignore
   wrapper.__annotations__ = getattr(func, "__annotations__", {})
   wrapper.unsafe = func.unsafe  # type: ignore
-  wrapper.sync_call = func  # type: ignore
+  wrapper.sync_call = getattr(func, "sync_call", func)  # type: ignore
 
   return rpc_registry.register(wrapper)
 
