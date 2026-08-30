@@ -21,6 +21,7 @@
 """Registry manager for IDA MCP backends."""
 
 import atexit
+import contextlib
 import json
 import logging
 import os
@@ -65,7 +66,7 @@ class RegistryManager:
         "metadata": metadata or {},
     }
     file_path = self.registry_dir / f"{name}.json"
-
+    temp_path = ""
     try:
       with tempfile.NamedTemporaryFile(
           mode="w", dir=str(self.registry_dir), delete=False
@@ -76,6 +77,10 @@ class RegistryManager:
     except Exception as e:
       logging.exception("Failed to write registry file: %s", e)
       return None
+    finally:
+      if temp_path and os.path.isfile(temp_path):
+        with contextlib.suppress(OSError):
+          os.unlink(temp_path)
     self.current_file = file_path
 
     # Register cleanup

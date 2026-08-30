@@ -170,7 +170,7 @@ class HeadlessManager:
     if database_id in self.lru_queue:
       self.lru_queue.remove(database_id)
     pid = _global_database_id_to_pid.pop(database_id, None)
-    if pid is not None:
+    if pid is not None and _is_process_running(pid):
       try:
         # On Windows, try CTRL_BREAK_EVENT for graceful shutdown if available
         if sys.platform == "win32" and hasattr(signal, "CTRL_BREAK_EVENT"):
@@ -374,7 +374,7 @@ class HeadlessManager:
 _headless_manager = HeadlessManager(CONFIG.get("max_headless_instances", 4))
 
 
-async def connect_to_backend(registry_file: pathlib.Path, mtime: float) -> None:
+async def connect_to_backend(registry_file: pathlib.Path) -> None:
   """Connect to a backend."""
   backend_id = registry_file.stem
   logging.info("[Gateway] connect_to_backend triggered for %s", backend_id)
@@ -542,13 +542,8 @@ class RegistryEventHandler(FileSystemEventHandler):
 
   def _handle_event_by_path(self, path: str) -> None:
     if path.endswith(".json") and os.path.isfile(path):
-      try:
-        mtime = os.stat(path).st_mtime
-      except OSError:
-        logging.exception("Failed to stat %s", path)
-        return
       asyncio.run_coroutine_threadsafe(
-          connect_to_backend(pathlib.Path(path), mtime), self.loop
+          connect_to_backend(pathlib.Path(path)), self.loop
       )
 
   def on_moved(self, event: DirMovedEvent | FileMovedEvent) -> None:
@@ -561,8 +556,7 @@ class RegistryEventHandler(FileSystemEventHandler):
     else:
       path = event.dest_path
 
-    if path.endswith(".json"):
-      self._handle_event_by_path(path)
+    self._handle_event_by_path(path)
 
   def on_deleted(self, event: DirDeletedEvent | FileDeletedEvent):
     if event.is_directory:
@@ -719,13 +713,7 @@ async def lifespan(app):
     atexit.register(shutdown_clients)
     # Initial Scan
     for registry_file in REGISTRY_DIR.glob("*.json"):
-      try:
-        mtime = os.stat(registry_file).st_mtime
-        _ = asyncio.create_task(connect_to_backend(registry_file, mtime))
-      except OSError as e:
-        logging.exception(
-            "Failed to stat registry file %s: %s", registry_file, e
-        )
+      _ = asyncio.create_task(connect_to_backend(registry_file))
 
     yield
 

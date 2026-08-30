@@ -64,10 +64,9 @@ def set_keepalive(sock):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
     if sys.platform == "win32" and hasattr(socket, "SIO_KEEPALIVE_VALS"):
       # asyncio TransportSocket wraps the real socket in _sock and doesn't expose ioctl.
-      ioctl_sock = (
-          sock if hasattr(sock, "ioctl") else getattr(sock, "_sock", None)
-      )
+      ioctl_sock = getattr(sock, "_sock", sock)
       if ioctl_sock and hasattr(ioctl_sock, "ioctl"):
+        # Windows: (onoff, timeout_ms, interval_ms)
         ioctl_sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, 10000, 5000))
     elif sys.platform == "darwin":
       # macOS
