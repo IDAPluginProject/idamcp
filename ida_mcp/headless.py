@@ -27,9 +27,13 @@ import pathlib
 import signal
 import sys
 import threading
+
 # fmt: off
 # idapro must go first to initialize idalib
-import idapro  # pylint: disable=g-bad-import-order
+try:
+  import idapro  # pylint: disable=g-bad-import-order
+except ImportError:
+  sys.exit("[Error] Can't import idapro, please install idalib first.")
 
 import idaapi
 from ida_mcp.core import ida_thread
