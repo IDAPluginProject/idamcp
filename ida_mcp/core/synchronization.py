@@ -72,26 +72,23 @@ class _IDACall:
         f"execute_sync silently failed to execute {ff.__name__}"
     )
 
-    @functools.wraps(ff)
-    def runned() -> None:
-      # pylint: disable=broad-exception-caught
-      if token is not None and token.is_cancelled:
-        self.success = False
-        self.result = asyncio.CancelledError("Tool cancelled before execution")
-        return
+  def _runned(self) -> None:
+    # pylint: disable=broad-exception-caught
+    if self.token is not None and self.token.is_cancelled:
+      self.success = False
+      self.result = asyncio.CancelledError("Tool cancelled before execution")
+      return
 
-      old_batch = idc.batch(1)
-      try:
-        with cancellation_profile(token):
-          self.result = self.ff()
-          self.success = True
-      except BaseException as e:
-        self.success = False
-        self.result = e
-      finally:
-        idc.batch(old_batch)
-
-    self.runned = runned
+    old_batch = idc.batch(1)
+    try:
+      with cancellation_profile(self.token):
+        self.result = self.ff()
+        self.success = True
+    except BaseException as e:
+      self.success = False
+      self.result = e
+    finally:
+      idc.batch(old_batch)
 
   def run_in_main(self) -> Any:
     old_batch = idc.batch(1)
@@ -111,9 +108,9 @@ class _IDACall:
 
     if getattr(idaapi, "is_headless", False):
       # Headless mode
-      ida_thread.execute_sync(self.runned, self.safety_mode)
+      ida_thread.execute_sync(self._runned, self.safety_mode)
     else:
-      idaapi.execute_sync(self.runned, self.safety_mode)
+      idaapi.execute_sync(self._runned, self.safety_mode)
 
     return self.get_result()
 
@@ -122,10 +119,10 @@ class _IDACall:
       return self.run_in_main()
 
     if getattr(idaapi, "is_headless", False):
-      await ida_thread.execute_async(self.runned, self.safety_mode)
+      await ida_thread.execute_async(self._runned, self.safety_mode)
     else:
       await asyncio.to_thread(
-          idaapi.execute_sync, self.runned, self.safety_mode
+          idaapi.execute_sync, self._runned, self.safety_mode
       )
 
     return self.get_result()
