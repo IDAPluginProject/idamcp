@@ -148,8 +148,8 @@ The SQLite database maintains the following relational tables representing the
 IDA Pro database state:
 
 *   **`functions`**: `name`, `demangled_name`, `start_ea`, `end_ea`, `size`,
-    `prototype`
-*   **`strings`**: `address`, `string`, `type`, `length`
+    `prototype`, `is_lib`
+*   **`strings`**: `address`, `length`, `string`
 *   **`names`**: `address`, `name`
 *   **`imports`**: `address`, `name`, `module`
 *   **`segments`**: `name`, `class`, `start_ea`, `end_ea`, `size`, `permissions`

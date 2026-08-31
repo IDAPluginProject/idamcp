@@ -35,6 +35,7 @@ import time
 import traceback
 from typing import Any, Iterable, Tuple
 import ida_auto
+import ida_funcs
 import ida_idp
 import ida_kernwin
 from ida_mcp.core.decorators import get_cancellation_token
@@ -178,8 +179,8 @@ def _get_stored_min_ea(conn: sqlite3.Connection) -> int | None:
 def _check_and_migrate_db(conn: sqlite3.Connection) -> None:
   """Checks user_version and image_min_ea; migrates (recreates) DB if outdated.
 
-  Version 3.0 (represented as integer 3) anchors the table schema.
-  If target_version is older than 3 or if the recorded image_min_ea has changed,
+  Version 4.0 (represented as integer 4) anchors the table schema.
+  If target_version is older than 4 or if the recorded image_min_ea has changed,
   all tables are dropped and re-created from scratch.
 
   Args:
@@ -190,7 +191,7 @@ def _check_and_migrate_db(conn: sqlite3.Connection) -> None:
     row = cursor.fetchone()
     current_version = row[0] if row else 0
 
-    target_version = 3
+    target_version = 4
     stored_min_ea = _get_stored_min_ea(conn)
 
     needs_migration = (
@@ -347,6 +348,7 @@ class FuncInfo:
   demangled_name: str | None
   prototype: str | None
   size: int
+  is_lib: int
 
 
 @idaread
@@ -383,6 +385,9 @@ def _get_func_info(func_ea: int) -> FuncInfo | None:
   else:
     proto = idc.get_type(bounds.start_ea)
 
+  flags = helper.get_func_flags(bounds.start_ea)
+  is_lib = 1 if flags and (flags & ida_funcs.FUNC_LIB) else 0
+
   return FuncInfo(
       start_ea=_to_signed_64(bounds.start_ea),
       end_ea=_to_signed_64(bounds.end_ea),
@@ -390,6 +395,7 @@ def _get_func_info(func_ea: int) -> FuncInfo | None:
       demangled_name=demangled or None,
       prototype=proto or None,
       size=func_size,
+      is_lib=is_lib,
   )
 
 
@@ -424,14 +430,15 @@ def populate_functions():
             info.demangled_name,
             info.prototype,
             info.size,
+            info.is_lib,
         )
 
   _recreate_and_insert(
       "functions",
       "start_ea INTEGER, end_ea INTEGER, name TEXT, demangled_name TEXT,"
-      " prototype TEXT, size INTEGER",
+      " prototype TEXT, size INTEGER, is_lib INTEGER",
       _gen(),
-      column_count=6,
+      column_count=7,
   )
   with _db_write_lock:
     conn = _get_rw_conn()
@@ -444,6 +451,9 @@ def populate_functions():
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_functions_name ON functions (name,"
         " start_ea, size)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_functions_is_lib ON functions (is_lib)"
     )
 
 
@@ -895,11 +905,12 @@ def _db_worker():
                 )
                 if func_info is not None:
                   cursor.execute(
-                      "UPDATE functions SET demangled_name = ?, prototype = ?"
-                      " WHERE start_ea = ?",
+                      "UPDATE functions SET demangled_name = ?, prototype = ?,"
+                      " is_lib = ? WHERE start_ea = ?",
                       (
                           func_info.demangled_name,
                           func_info.prototype,
+                          func_info.is_lib,
                           signed_ea,
                       ),
                   )
@@ -914,7 +925,7 @@ def _db_worker():
                 )
                 if func_info is not None:
                   cursor.execute(
-                      "INSERT INTO functions VALUES (?, ?, ?, ?, ?, ?)",
+                      "INSERT INTO functions VALUES (?, ?, ?, ?, ?, ?, ?)",
                       (
                           func_info.start_ea,
                           func_info.end_ea,
@@ -922,6 +933,7 @@ def _db_worker():
                           func_info.demangled_name,
                           func_info.prototype,
                           func_info.size,
+                          func_info.is_lib,
                       ),
                   )
 

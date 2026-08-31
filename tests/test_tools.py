@@ -2289,10 +2289,46 @@ hex(tid) if tid is not None else ""
     self.assertIsInstance(columns, list)
     col_names = {c["name"].lower() for c in columns}
     self.assertTrue(
-        {"start_ea", "end_ea", "name", "demangled_name", "size"}.issubset(
-            col_names
-        )
+        {
+            "start_ea",
+            "end_ea",
+            "name",
+            "demangled_name",
+            "size",
+            "is_lib",
+        }.issubset(col_names)
     )
+
+    # Verify is_lib in functions
+    func_lib_rows = await run_sql(
+        "SELECT start_ea, is_lib FROM functions LIMIT 5"
+    )
+    self.assertIsInstance(func_lib_rows, list)
+    for row in func_lib_rows:
+      self.assertIn("is_lib", row)
+      self.assertIn(row["is_lib"], ("0x0", "0x1"))
+
+    # Verify address column across strings, names, and imports
+    for tbl, required_cols in [
+        ("strings", {"address", "length", "string"}),
+        ("names", {"address", "name"}),
+        ("imports", {"address", "name", "module"}),
+    ]:
+      tbl_cols = await run_sql(f"SELECT * FROM pragma_table_info('{tbl}')")
+      self.assertIsInstance(tbl_cols, list)
+      col_names = {c["name"].lower() for c in tbl_cols}
+      self.assertTrue(
+          required_cols.issubset(col_names),
+          f"Missing columns in {tbl}: {required_cols - col_names}",
+      )
+
+      # Query table and verify address is valid
+      tbl_rows = await run_sql(f"SELECT address FROM {tbl} LIMIT 5")
+      self.assertIsInstance(tbl_rows, list)
+      self.assertGreater(len(tbl_rows), 0, f"No rows returned from {tbl}")
+      for row in tbl_rows:
+        self.assertIn("address", row)
+        self.assertTrue(row["address"].startswith("0x"))
 
     # 3. Verify Hexadecimal Literals parser (e.g. WHERE address = 0x1240)
     # Let's get rebased address of 'caller_func' first
@@ -3196,7 +3232,7 @@ print(f"REBASE RESULT: {rc}")
 
   async def verify_db_versioning_and_migration(self):
     """Verifies that DB version is set and database is migrated if version is old."""
-    # 1. Verify current version is 3 (target version)
+    # 1. Verify current version is 4 (target version)
     res_dict = await self.run_tool("sql_query", sql="PRAGMA user_version")
     self.assertIsInstance(res_dict, dict)
     self.assertIn("rows", res_dict)
@@ -3204,7 +3240,7 @@ print(f"REBASE RESULT: {rc}")
     res = res_dict["rows"]
     self.assertEqual(len(res), 1)
     self.assertIn("user_version", res[0])
-    self.assertEqual(res[0]["user_version"], "0x3")
+    self.assertEqual(res[0]["user_version"], "0x4")
 
     # Verify functions table exists and has data (triggered population)
     funcs_res = await self.run_tool(
@@ -3248,7 +3284,7 @@ print("DEBUG: Reset checked flag")
     await self.run_tool("idapython_eval", code=reset_code)
 
     # 3. Trigger a query. This should trigger migration (drop tables and views,
-    # set version to 3). We query sqlite_master to verify tables and views were
+    # set version to 4). We query sqlite_master to verify tables and views were
     # dropped.
     entities_res = await self.run_tool(
         "sql_query",
@@ -3275,13 +3311,13 @@ print("DEBUG: Reset checked flag")
     ]:
       self.assertNotIn(ent, entity_names)
 
-    # Now verify version is back to 3
+    # Now verify version is back to 4
     res_dict = await self.run_tool("sql_query", sql="PRAGMA user_version")
     self.assertIsInstance(res_dict, dict)
     self.assertIn("rows", res_dict)
     self.assertNotIn("error", res_dict)
     res = res_dict["rows"]
-    self.assertEqual(res[0]["user_version"], "0x3")
+    self.assertEqual(res[0]["user_version"], "0x4")
 
     # Now query functions again, it should trigger re-population and succeed
     funcs_res = await self.run_tool(
@@ -3318,7 +3354,7 @@ print("DEBUG: Reset checked flag")
     stored_ea = int(meta_rows[0]["value"], 16)
     print(f"DEBUG: Stored image_min_ea in metadata: {hex(stored_ea)}")
 
-    # 5. Simulate image_min_ea change in metadata while version is 3
+    # 5. Simulate image_min_ea change in metadata while version is 4
     corrupt_min_ea_code = """
 import ida_mcp.tools.query as q
 conn = q._get_rw_conn()

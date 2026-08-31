@@ -296,6 +296,71 @@ def adjust_query(parsed: Any) -> str:
   return rewritten.sql(dialect="sqlite")
 
 
+def _extract_tables(node: Any) -> list[str]:
+  """Extracts all referenced database table names from a parsed SQL AST node.
+
+  Analyzes both standard SQL query constructs and SQLite-specific schema
+  introspection statements (such as PRAGMA statements and table-valued PRAGMA
+  functions) to determine all underlying tables required for execution.
+  This allows the query engine to lazily initialize or repopulate tables in
+  IDA's SQLite database before the query executes.
+
+  The extraction covers:
+    1. Standard Table References (`exp.Table`):
+       Captures table names in FROM clauses, JOINs, subqueries, and CTEs.
+    2. Table-Valued PRAGMA Functions (`pragma_table_info`,
+    `pragma_table_xinfo`):
+       In queries like `SELECT * FROM pragma_table_info('functions')`, sqlglot
+       parses `pragma_table_info` as an anonymous function whose first argument
+       is the target table name.
+    3. PRAGMA Statements (`PRAGMA table_info(...)`, `PRAGMA table_xinfo(...)`):
+       In statements like `PRAGMA table_info('functions')`, sqlglot parses this
+       as an `exp.Pragma` node containing an equality check where the expression
+       is the target table name.
+
+  Args:
+    node: A parsed sqlglot AST expression (e.g. `exp.Select`, `exp.Pragma`,
+      etc.).
+
+  Returns:
+    A sorted list of lowercase table names referenced by the AST.
+
+  Examples:
+    >>> import sqlglot
+    >>> node = sqlglot.parse_one("SELECT * FROM functions JOIN names USING
+    (address)")
+    >>> _extract_tables(node)
+    ['functions', 'names']
+
+    >>> node = sqlglot.parse_one("SELECT * FROM pragma_table_info('strings')")
+    >>> _extract_tables(node)
+    ['strings']
+
+    >>> node = sqlglot.parse_one("PRAGMA table_info('imports')")
+    >>> _extract_tables(node)
+    ['imports']
+  """
+  tables = {t.name.lower() for t in node.find_all(exp.Table) if t.name}
+  for anon in node.find_all(exp.Anonymous):
+    if str(anon.this).lower() in ("pragma_table_info", "pragma_table_xinfo"):
+      for arg in anon.expressions:
+        name = arg.name.strip("'\"")
+        if name:
+          tables.add(name.lower())
+  if isinstance(node, exp.Pragma):
+    pragma_eq = node.this
+    if isinstance(pragma_eq, exp.EQ) and str(pragma_eq.this).lower() in (
+        "table_info",
+        "table_xinfo",
+    ):
+      col = pragma_eq.expression
+      if col:
+        name = col.name.strip("'\"")
+        if name:
+          tables.add(name.lower())
+  return sorted(tables)
+
+
 def _to_query_result(res: dict[str, Any]) -> QueryResult:
   """Constructs a QueryResult from a dictionary received over RPC."""
   if res.get("error"):
@@ -325,7 +390,7 @@ async def sql_query(
 
   ### Available Tables & Schemas
   - functions (start_ea INTEGER, end_ea INTEGER, name TEXT, demangled_name
-    TEXT, prototype TEXT, size INTEGER)
+    TEXT, prototype TEXT, size INTEGER, is_lib INTEGER)
   - strings (address INTEGER, length INTEGER, string TEXT)
   - names (address INTEGER, name TEXT)
   - imports (address INTEGER, name TEXT, module TEXT)
@@ -409,13 +474,10 @@ async def sql_query(
           )
           continue
 
+        tables = _extract_tables(node)
         if isinstance(node, exp.Pragma):
           rewritten_sql = node.sql(dialect="sqlite")
-          tables = []
         else:
-          tables = list(
-              {t.name.lower() for t in node.find_all(exp.Table) if t.name}
-          )
           rewritten_sql = adjust_query(node)
 
         batch_indices.append(len(current_results))

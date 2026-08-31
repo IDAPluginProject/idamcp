@@ -71,11 +71,11 @@ class RegistryManager:
       with tempfile.NamedTemporaryFile(
           mode="w", dir=str(self.registry_dir), delete=False
       ) as temp_file:
-        json.dump(data, temp_file)
         temp_path = temp_file.name
+        json.dump(data, temp_file)
       os.replace(temp_path, file_path)
     except Exception as e:
-      logging.exception("Failed to write registry file: %s", e)
+      logging.exception("Failed to write registry file: %s", str(e))
       return None
     finally:
       if temp_path and os.path.isfile(temp_path):
@@ -92,6 +92,6 @@ class RegistryManager:
     if self.current_file and self.current_file.exists():
       try:
         self.current_file.unlink()
-        print(f"Removed registry file: {self.current_file}")
+        logging.info(f"Removed registry file: %s", str(self.current_file))
       except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"Failed to remove registry file: {e}")
+        logging.exception(f"Failed to remove registry file: %s", str(e))
