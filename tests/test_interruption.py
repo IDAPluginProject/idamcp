@@ -63,6 +63,16 @@ for module in MOCKED_MODULES:
   if module not in sys.modules:
     sys.modules[module] = mock.MagicMock()
 
+# Ensure IDB_Hooks and IDP_Hooks are valid base types when ida_idp is mocked
+if not isinstance(getattr(sys.modules["ida_idp"], "IDB_Hooks", None), type):
+  sys.modules["ida_idp"].IDB_Hooks = type(
+      "IDB_Hooks", (), {"hook": lambda self: True, "unhook": lambda self: True}
+  )
+if not isinstance(getattr(sys.modules["ida_idp"], "IDP_Hooks", None), type):
+  sys.modules["ida_idp"].IDP_Hooks = type(
+      "IDP_Hooks", (), {"hook": lambda self: True, "unhook": lambda self: True}
+  )
+
 # pylint: disable=g-import-not-at-top
 from ida_mcp.core.decorators import cancellation_profile
 from ida_mcp.core.decorators import cancellation_token_var

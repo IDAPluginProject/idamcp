@@ -104,15 +104,8 @@ def _ro_authorizer(action, arg1, arg2, dbname, source):
 
 def _get_db_path_and_uri() -> Tuple[str, bool]:
   """Determines DB path and whether it's a URI."""
-  config = load_config()
-  idb_path = getattr(idaapi, "idb_path", None)
-  if idb_path is None:
-    with contextlib.suppress(Exception):
-      import ida_loader
-
-      idb_path = ida_loader.get_path(ida_loader.PATH_TYPE_IDB)
-  if idb_path is not None and (
-      config.get("sqlite_persistent") or config.get("duckdb_persistent")
+  if load_config().get("sqlite_persistent") and (
+      idb_path := getattr(idaapi, "idb_path", None)
   ):
     path = pathlib.Path(idb_path).with_suffix(".db")
     return str(path), False
@@ -125,6 +118,21 @@ def _to_signed_64(val: int) -> int:
   if val < -0x8000000000000000 or val > 0xFFFFFFFFFFFFFFFF:
     raise ValueError(f"Integer {val} exceeds 64-bit integer limit")
   return val if val < 0x8000000000000000 else val - 0x10000000000000000
+
+
+def _ea_range_clause(
+    col: str, start_ea: int, end_ea: int
+) -> tuple[str, tuple[int, int]]:
+  """Generates a SQL range clause [start_ea, end_ea) for 64-bit addresses.
+
+  Handles wrap-around when the unsigned address range straddles the 64-bit
+  signed integer boundary (0x7fff_ffff_ffff_ffff -> 0x8000_0000_0000_0000).
+  """
+  signed_start = _to_signed_64(start_ea)
+  signed_end = _to_signed_64(end_ea)
+  if start_ea < end_ea and signed_start >= signed_end:
+    return f"({col} >= ? OR {col} < ?)", (signed_start, signed_end)
+  return f"{col} >= ? AND {col} < ?", (signed_start, signed_end)
 
 
 def _create_connection(read_only: bool = False):
@@ -1013,8 +1021,139 @@ def _db_worker():
                       "UPDATE entries SET name = ? WHERE address = ?",
                       (new_name, signed_ea),
                   )
+            case "set_func_start":
+              old_start_ea, end_ea, new_start_ea = event[1:4]
+              signed_old_start = _to_signed_64(old_start_ea)
+              signed_new_start = _to_signed_64(new_start_ea)
+              signed_end = _to_signed_64(end_ea)
+              new_size = end_ea - new_start_ea
 
-            case "func_added" | "func_updated":
+              if _table_exists("functions"):
+                cursor.execute(
+                    """
+                    UPDATE functions
+                    SET start_ea = ?, size = ?
+                    WHERE start_ea = ? AND end_ea = ?
+                    """,
+                    (signed_new_start, new_size, signed_old_start, signed_end),
+                )
+                if cursor.rowcount == 0:
+                  cursor.execute(
+                      """
+                      UPDATE functions
+                      SET start_ea = ?, size = ?
+                      WHERE start_ea = ?
+                      """,
+                      (signed_new_start, new_size, signed_old_start),
+                  )
+
+              if _table_exists("xrefs"):
+                cursor.execute(
+                    "UPDATE xrefs SET from_function_ea = NULL WHERE"
+                    " from_function_ea = ?",
+                    (signed_old_start,),
+                )
+                range_clause, params = _ea_range_clause(
+                    "from_ea", new_start_ea, end_ea
+                )
+                cursor.execute(
+                    f"""
+                    UPDATE xrefs
+                    SET from_function_ea = ?
+                    WHERE {range_clause}
+                    """,
+                    (signed_new_start, *params),
+                )
+
+            case "set_func_end":
+              start_ea, old_end_ea, new_end_ea = event[1:4]
+              signed_start = _to_signed_64(start_ea)
+              signed_old_end = _to_signed_64(old_end_ea)
+              signed_new_end = _to_signed_64(new_end_ea)
+              new_size = new_end_ea - start_ea
+
+              if _table_exists("functions"):
+                cursor.execute(
+                    """
+                    UPDATE functions
+                    SET end_ea = ?, size = ?
+                    WHERE start_ea = ? AND end_ea = ?
+                    """,
+                    (signed_new_end, new_size, signed_start, signed_old_end),
+                )
+                if cursor.rowcount == 0:
+                  cursor.execute(
+                      """
+                      UPDATE functions
+                      SET end_ea = ?, size = ?
+                      WHERE start_ea = ?
+                      """,
+                      (signed_new_end, new_size, signed_start),
+                  )
+
+              if _table_exists("xrefs"):
+                if new_end_ea < old_end_ea:
+                  range_clause, params = _ea_range_clause(
+                      "from_ea", new_end_ea, old_end_ea
+                  )
+                  cursor.execute(
+                      f"""
+                      UPDATE xrefs
+                      SET from_function_ea = NULL
+                      WHERE {range_clause} AND from_function_ea = ?
+                      """,
+                      (*params, signed_start),
+                  )
+                elif new_end_ea > old_end_ea:
+                  range_clause, params = _ea_range_clause(
+                      "from_ea", old_end_ea, new_end_ea
+                  )
+                  cursor.execute(
+                      f"""
+                      UPDATE xrefs
+                      SET from_function_ea = ?
+                      WHERE {range_clause}
+                      """,
+                      (signed_start, *params),
+                  )
+
+            case "func_added":
+              func_info: FuncInfo | None
+              start_ea, end_ea, func_info = event[1:4]
+              signed_start = _to_signed_64(start_ea)
+              signed_end = _to_signed_64(end_ea)
+              if _table_exists("functions"):
+                cursor.execute(
+                    "DELETE FROM functions WHERE start_ea = ?", (signed_start,)
+                )
+                if func_info is not None:
+                  cursor.execute(
+                      "INSERT INTO functions VALUES (?, ?, ?, ?, ?, ?, ?)",
+                      (
+                          func_info.start_ea,
+                          func_info.end_ea,
+                          func_info.name,
+                          func_info.demangled_name,
+                          func_info.prototype,
+                          func_info.size,
+                          func_info.is_lib,
+                      ),
+                  )
+
+              if _table_exists("xrefs"):
+                range_clause, params = _ea_range_clause(
+                    "from_ea", start_ea, end_ea
+                )
+                cursor.execute(
+                    f"""
+                    UPDATE xrefs
+                    SET from_function_ea = ?
+                    WHERE {range_clause}
+                    """,
+                    (signed_start, *params),
+                )
+
+            case "func_updated":
               func_info: FuncInfo | None
               ea, func_info = event[1:3]
               signed_ea = _to_signed_64(ea)
@@ -1038,10 +1177,18 @@ def _db_worker():
 
             case "func_deleted":
               ea = event[1]
+              signed_ea = _to_signed_64(ea)
               if _table_exists("functions"):
                 cursor.execute(
                     "DELETE FROM functions WHERE start_ea = ?",
-                    (_to_signed_64(ea),),
+                    (signed_ea,),
+                )
+
+              if _table_exists("xrefs"):
+                cursor.execute(
+                    "UPDATE xrefs SET from_function_ea = NULL WHERE"
+                    " from_function_ea = ?",
+                    (signed_ea,),
                 )
 
             case "local_type_changed":
@@ -1218,7 +1365,7 @@ class DBUpdateHooks(ida_idp.IDB_Hooks):
   def func_added(self, pfn: idaapi.func_t, *args: Any) -> None:
     del args
     info = _get_func_info(pfn.start_ea)
-    _db_update_queue.put(("func_added", pfn.start_ea, info))
+    _db_update_queue.put(("func_added", pfn.start_ea, pfn.end_ea, info))
 
   @skip_if_rebasing
   def func_deleted(self, func_ea: "idaapi.ea_t", *args: Any) -> None:
@@ -1229,17 +1376,19 @@ class DBUpdateHooks(ida_idp.IDB_Hooks):
   def set_func_start(
       self, pfn: idaapi.func_t, new_start: "idaapi.ea_t" = 0, *args: Any
   ) -> None:
-    del new_start, args
-    info = _get_func_info(pfn.start_ea)
-    _db_update_queue.put(("func_updated", pfn.start_ea, info))
+    del args
+    if pfn.start_ea != new_start:
+      _db_update_queue.put(
+          ("set_func_start", pfn.start_ea, pfn.end_ea, new_start)
+      )
 
   @skip_if_rebasing
   def set_func_end(
       self, pfn: idaapi.func_t, new_end: "idaapi.ea_t" = 0, *args: Any
   ) -> None:
-    del new_end, args
-    info = _get_func_info(pfn.start_ea)
-    _db_update_queue.put(("func_updated", pfn.start_ea, info))
+    del args
+    if pfn.end_ea != new_end:
+      _db_update_queue.put(("set_func_end", pfn.start_ea, pfn.end_ea, new_end))
 
   @skip_if_rebasing
   def func_updated(self, pfn: idaapi.func_t, *args: Any) -> None:
