@@ -385,8 +385,8 @@ async def sql_query(
   """Executes read-only SQL queries against IDA Pro using SQLite.
 
   Tables ('functions', 'strings', 'names', 'imports', 'segments', 'local_types',
-  'xrefs') are automatically populated from IDA on first use and kept in sync
-  automatically via event hooks.
+  'xrefs', 'entries') are automatically populated from IDA on first use and
+  kept in sync automatically via event hooks.
 
   ### Available Tables & Schemas
   - functions (start_ea INTEGER, end_ea INTEGER, name TEXT, demangled_name
@@ -398,6 +398,7 @@ async def sql_query(
   size INTEGER, permissions TEXT)
   - local_types (ordinal INTEGER, name TEXT, declaration TEXT)
   - xrefs (from_ea INTEGER, to_ea INTEGER, type TEXT, from_function_ea INTEGER)
+  - entries (index_id INTEGER, ordinal INTEGER, address INTEGER, name TEXT)
 
   It supports standard SQL SELECT statements. You can provide multiple
   queries in a list or separated by ';'.

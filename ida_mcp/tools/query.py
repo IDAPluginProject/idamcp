@@ -35,6 +35,7 @@ import time
 import traceback
 from typing import Any, Iterable, Tuple
 import ida_auto
+import ida_entry
 import ida_funcs
 import ida_idp
 import ida_kernwin
@@ -732,6 +733,81 @@ def populate_xrefs() -> None:
     )
 
 
+_entries_fingerprint: tuple[int, tuple[tuple[int, int], ...]] | None = None
+
+
+@idaread
+def _is_entries_dirty() -> bool:
+  """Checks if entry points in IDA have changed."""
+  global _entries_fingerprint
+  if _entries_fingerprint is None:
+    return True
+
+  expected_qty, expected_items = _entries_fingerprint
+  actual_qty = ida_entry.get_entry_qty()
+  if actual_qty != expected_qty:
+    return True
+
+  for i in range(actual_qty):
+    ord_val = ida_entry.get_entry_ordinal(i)
+    ea = ida_entry.get_entry(ord_val)
+    expected_ord, expected_ea = expected_items[i]
+    if ord_val != expected_ord or ea != expected_ea:
+      return True
+
+  return False
+
+
+@_time_populator
+@idaread
+def populate_entries():
+  """Populates the entries table from idautils.Entries()."""
+  global _entries_fingerprint
+
+  fingerprint_items: list[tuple[int, int]] = []
+
+  def _gen():
+    for item in idautils.Entries():
+      idx, ordinal, ea, name = item
+      fingerprint_items.append((ordinal, ea))
+      if name:
+        # idautils.Entries() fetches EA via get_entry(ordinal). In formats like
+        # ELF without native export ordinals, ordinals are invariant and do not
+        # relocate on rebase, causing get_entry() to return un-rebased/desynced
+        # EAs that mismatch functions. Resolve via namelist to get the true EA.
+        name_ea = ida_name.get_name_ea(idaapi.BADADDR, name)
+        if name_ea != idaapi.BADADDR:
+          ea = name_ea
+
+      yield (
+          idx,
+          ordinal,
+          _to_signed_64(ea),
+          name,
+      )
+
+  _recreate_and_insert(
+      "entries",
+      "index_id INTEGER, ordinal INTEGER, address INTEGER, name TEXT",
+      _gen(),
+      column_count=4,
+  )
+  with _db_write_lock:
+    conn = _get_rw_conn()
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_entries_address ON entries (address)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_entries_name ON entries (name)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_entries_ordinal ON entries (ordinal)"
+    )
+    _created_tables.add("entries")
+
+  _entries_fingerprint = (len(fingerprint_items), tuple(fingerprint_items))
+
+
 POPULATORS = {
     "functions": populate_functions,
     "strings": populate_strings,
@@ -740,6 +816,7 @@ POPULATORS = {
     "segments": populate_segments,
     "local_types": populate_local_types,
     "xrefs": populate_xrefs,
+    "entries": populate_entries,
 }
 
 _strings_dirty = False
@@ -781,6 +858,12 @@ def sql_query(
         if table_name in POPULATORS:
           if not _table_exists(table_name):
             POPULATORS[table_name]()
+          elif (
+              table_name == "entries"
+              and load_config().get("check_entries_freshness")
+              and _is_entries_dirty()
+          ):
+            populate_entries()
           elif (
               not _skip_string_updates
               and table_name == "strings"
@@ -887,6 +970,7 @@ def _db_worker():
             case "renamed":
               func_info: FuncInfo | None
               ea, new_name, func_info = event[1:4]
+              old_name = event[4] if len(event) > 4 else ""
               signed_ea = _to_signed_64(ea)
               if _table_exists("names"):
                 cursor.execute(
@@ -913,6 +997,21 @@ def _db_worker():
                           func_info.is_lib,
                           signed_ea,
                       ),
+                  )
+
+              if _table_exists("entries"):
+                # Constrain by old_name when available to avoid clobbering
+                # multiple distinct export aliases sharing the same address.
+                if old_name:
+                  cursor.execute(
+                      "UPDATE entries SET name = ? WHERE address = ? AND name ="
+                      " ?",
+                      (new_name, signed_ea, old_name),
+                  )
+                else:
+                  cursor.execute(
+                      "UPDATE entries SET name = ? WHERE address = ?",
+                      (new_name, signed_ea),
                   )
 
             case "func_added" | "func_updated":
@@ -1047,8 +1146,9 @@ def skip_if_rebasing(func=None, *, default_return=None):
 
 def _trigger_rebase_invalidation() -> None:
   """Invalidates database tables and flushes pending queue upon rebase/move."""
-  global _is_rebasing
+  global _is_rebasing, _entries_fingerprint
   _is_rebasing = True
+  _entries_fingerprint = None
 
   while not _db_update_queue.empty():
     try:
@@ -1088,13 +1188,14 @@ class DBUpdateHooks(ida_idp.IDB_Hooks):
       old_name: str = "",
       *args: Any,
   ) -> None:
-    del local_name, old_name, args
+    del local_name, args
     func_info = _get_func_info(ea)
     _db_update_queue.put((
         "renamed",
         ea,
         new_name,
         func_info,
+        old_name,
     ))
 
   @skip_if_rebasing

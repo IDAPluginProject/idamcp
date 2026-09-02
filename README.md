@@ -58,10 +58,11 @@ Key capabilities of this implementation include:
     GUI, suitable for automated workflows. Sessions can be managed directly by
     the AI agent.
 *   **Relational SQL Engine**: Integrates a read-only SQLite relational database
-    populated on-demand and synchronized via IDA event hooks. Queries execute
-    concurrently in background threads without blocking IDA's main UI thread,
-    and an AST query layer (`sqlglot`) handles unsigned 64-bit memory
-    arithmetic, comparison rewriting, and hex literals.
+    populated on-demand and synchronized via IDA event hooks. Tables
+    (`functions`, `strings`, `names`, `imports`, `segments`, `local_types`,
+    `xrefs`, `entries`) support concurrent background queries without blocking
+    IDA's main UI thread, while an AST query layer (`sqlglot`) handles unsigned
+    64-bit arithmetic, comparison rewriting, and hex literals.
 
 *   **WYSIWYG Disassembly**: Disassembly tools (like `disassemble_function` and
     `disassemble_code`) return formatted text matching the IDA Pro UI, including
@@ -235,6 +236,7 @@ example of all available settings (showing defaults):
   "set_opcode_bytes": true,
   "populate_tables_on_startup": false,
   "sqlite_persistent": false,
+  "check_entries_freshness": false,
   "disabled_tools": [],
   "proxy_host": "localhost",
   "proxy_port": 8000
@@ -257,6 +259,13 @@ example of all available settings (showing defaults):
 *   **sqlite_persistent**: If `True`, the Sqlite database used by `sql_query`
     will be saved to a `.db` file in the same directory as your IDA IDB file.
     This avoids re-populating tables every time you open the database.
+*   **check_entries_freshness**: If `True`, the server verifies whether entry
+    points have changed in IDA (using a lightweight in-memory fingerprint)
+    before executing queries against the `entries` table, automatically
+    repopulating it if changes are detected. Because entry points represent
+    static binary exports (functions and global data symbols) and are not
+    expected to change after initial auto-analysis completes, this option
+    defaults to `False`.
 *   **disabled_tools**: A list of case-insensitive regular expressions. Any tool
     whose name matches a pattern in this list will not be registered. Use this
     to restrict the agent's capabilities.
@@ -276,6 +285,8 @@ You can override certain configuration settings using environment variables:
     population at startup.
 *   **SQLITE_PERSISTENT**: Set to `true`, `1`, or `yes` to enable persistent
     Sqlite storage.
+*   **CHECK_ENTRIES_FRESHNESS**: Set to `true`, `1`, or `yes` to enable entry
+    points freshness verification before querying the `entries` table.
 *   **ENABLE_ALL_UNSAFE_TOOLS**: Set to `true` to enable all unsafe tools.
 *   **ENABLED_UNSAFE_TOOLS**: A comma-separated list of specific unsafe tools to
     enable (e.g., `idapython_eval,dbg_step_over`).

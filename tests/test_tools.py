@@ -341,6 +341,7 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
         self.verify_type_declaration_error_cases,
         self.verify_sql_query_advanced,
         self.verify_xrefs_lifecycle,
+        self.verify_sql_entries_table,
         self.verify_safe_eval,
         self.verify_safe_eval_via_patch_assembly,
         self.verify_timeout_busy_handling,
@@ -1943,6 +1944,11 @@ hex(tid) if tid is not None else ""
         )
     )
 
+    # Clean up test_entry to keep IDB clean for subsequent tests
+    await self.run_tool(
+        "idapython_eval", code="import ida_entry; ida_entry.del_entry(100)"
+    )
+
     # 9. jump_to_address (expected to fail in headless batch mode due to lack of GUI)
     res = await self.run_tool(
         "jump_to_address", address=rebased_caller_func_str
@@ -2859,6 +2865,126 @@ res = idc.del_dref({abs_addr1}, {abs_addr3})
     self.assertIn("rows", res)
     self.assertNotIn("error", res)
     self.assertEqual(len(res["rows"]), 0)
+
+  async def verify_sql_entries_table(self):
+    """Verifies sql_query with entries table freshness checking."""
+    # 1. Query all entries
+    res = await self.run_tool(
+        "sql_query", sql="SELECT * FROM entries ORDER BY address"
+    )
+    self.assertIsInstance(res, dict)
+    self.assertIn("rows", res)
+    self.assertNotIn("error", res)
+    rows = res["rows"]
+    self.assertGreater(len(rows), 0)
+
+    # Verify column presence
+    first_row = rows[0]
+    self.assertIn("index_id", first_row)
+    self.assertIn("ordinal", first_row)
+    self.assertIn("address", first_row)
+    self.assertIn("name", first_row)
+
+    # Check for main entry point
+    main_entry = next((r for r in rows if r["name"] == "main"), None)
+    self.assertIsNotNone(
+        main_entry, "Expected 'main' entry point in entries table"
+    )
+    main_addr = int(main_entry["address"], 16)
+
+    # 2. Join entries with functions table
+    join_query = (
+        "SELECT e.address, e.name, f.size FROM entries e "
+        "JOIN functions f ON e.address = f.start_ea "
+        "WHERE e.name = 'main'"
+    )
+    join_res = await self.run_tool("sql_query", sql=join_query)
+    self.assertIsInstance(join_res, dict)
+    self.assertIn("rows", join_res)
+    self.assertEqual(len(join_res["rows"]), 1)
+    self.assertEqual(join_res["rows"][0]["name"], "main")
+    self.assertIn("size", join_res["rows"][0])
+
+    # 3. Test rename reflection in entries table
+    new_name = "test_renamed_main_entry"
+    rename_code = f"""
+import ida_name
+ida_name.set_name({main_addr}, "{new_name}")
+"""
+    await self.run_tool("idapython_eval", code=rename_code)
+    await asyncio.sleep(0.3)
+
+    renamed_query = f"SELECT name FROM entries WHERE address = {hex(main_addr)}"
+    renamed_res = await self.run_tool("sql_query", sql=renamed_query)
+    self.assertIsInstance(renamed_res, dict)
+    self.assertIn("rows", renamed_res)
+    self.assertEqual(len(renamed_res["rows"]), 1)
+    self.assertEqual(renamed_res["rows"][0]["name"], new_name)
+
+    # Restore original name
+    restore_code = f"""
+import ida_name
+ida_name.set_name({main_addr}, "main")
+"""
+    await self.run_tool("idapython_eval", code=restore_code)
+    await asyncio.sleep(0.3)
+
+    # 4. Test freshness check configuration
+    # Ensure baseline table is synced with IDA before testing freshness
+    sync_code = """
+from ida_mcp.tools.query import populate_entries
+populate_entries()
+"""
+    await self.run_tool("idapython_eval", code=sync_code)
+
+    # Count before adding
+    count_res = await self.run_tool(
+        "sql_query", sql="SELECT COUNT(*) as cnt FROM entries"
+    )
+    cnt_before = int(count_res["rows"][0]["cnt"], 16)
+
+    # Add a new entry point without freshness check enabled (default: False)
+    add_ep_code = f"""
+import ida_entry
+ida_entry.add_entry(8888, {main_addr}, "extra_test_ep", 1, 0)
+"""
+    await self.run_tool("idapython_eval", code=add_ep_code)
+
+    # Query with default config (freshness check disabled): count should be cached (unchanged)
+    cached_res = await self.run_tool(
+        "sql_query", sql="SELECT COUNT(*) as cnt FROM entries"
+    )
+    self.assertEqual(int(cached_res["rows"][0]["cnt"], 16), cnt_before)
+
+    # Enable check_entries_freshness in config
+    enable_fresh_code = """
+from shared.config import load_config
+load_config()["check_entries_freshness"] = True
+"""
+    await self.run_tool("idapython_eval", code=enable_fresh_code)
+
+    # Query again: should detect dirty and repopulate, reflecting the added entry
+    fresh_res = await self.run_tool(
+        "sql_query", sql="SELECT COUNT(*) as cnt FROM entries"
+    )
+    self.assertEqual(int(fresh_res["rows"][0]["cnt"], 16), cnt_before + 1)
+
+    # Verify the new entry is directly selectable
+    find_res = await self.run_tool(
+        "sql_query",
+        sql="SELECT ordinal, name FROM entries WHERE name = 'extra_test_ep'",
+    )
+    self.assertEqual(len(find_res["rows"]), 1)
+    self.assertEqual(int(find_res["rows"][0]["ordinal"], 16), 8888)
+
+    # Clean up added entry point and restore config
+    cleanup_code = """
+import ida_entry
+ida_entry.del_entry(8888)
+from shared.config import load_config
+load_config()["check_entries_freshness"] = False
+"""
+    await self.run_tool("idapython_eval", code=cleanup_code)
 
   async def verify_safe_eval(self):
     from gateway.patcher import _safe_eval_math

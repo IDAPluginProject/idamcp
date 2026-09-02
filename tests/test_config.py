@@ -143,6 +143,17 @@ class TestConfig(unittest.TestCase):
       config = shared.config.load_config(config_path="/nonexistent")
       self.assertFalse(config.get("sqlite_persistent"))
 
+  def test_check_entries_freshness_default(self):
+    """Test default value for check_entries_freshness is False."""
+    config = shared.config.load_config(config_path="/nonexistent")
+    self.assertFalse(config.get("check_entries_freshness"))
+
+  def test_check_entries_freshness_env(self):
+    """Test CHECK_ENTRIES_FRESHNESS environment variable."""
+    with mock.patch.dict("os.environ", {"CHECK_ENTRIES_FRESHNESS": "true"}):
+      config = shared.config.load_config(config_path="/nonexistent")
+      self.assertTrue(config.get("check_entries_freshness"))
+
 
 if __name__ == "__main__":
   unittest.main()

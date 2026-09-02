@@ -155,6 +155,7 @@ IDA Pro database state:
 *   **`segments`**: `name`, `class`, `start_ea`, `end_ea`, `size`, `permissions`
 *   **`local_types`**: `ordinal`, `name`, `declaration`
 *   **`xrefs`**: `from_ea`, `to_ea`, `type`, `from_function_ea`
+*   **`entries`**: `index_id`, `ordinal`, `address`, `name`
 *   **`_db_metadata`**: `key`, `value` (internal table recording session
     metadata such as `image_min_ea`)
 
@@ -189,7 +190,23 @@ and `IDP_Hooks` to keep relational tables synchronized in real-time:
 *   **Live IDB Events**: Real-time hooks capture renaming of symbols and
     functions, addition/deletion/updating of functions and segments, and
     code/data cross-references (`cref_added`, `dref_added`, `cref_deleted`,
-    `dref_deleted`).
+    `dref_deleted`). Renaming events also propagate in real-time to the
+    `entries` table, constrained by both address and old symbol name to avoid
+    clobbering distinct export aliases sharing the same address.
+*   **Entry Points & Freshness Tracking (`check_entries_freshness`)**: IDA does
+    not expose dedicated event hooks for entry point additions or removals. In
+    addition, for formats like ELF where export ordinals are synthetic and
+    invariant, address resolution falls back to the namelist (`get_name_ea`) to
+    prevent desynchronization when a database is rebased. Because entry points
+    represent the binary's static exported symbols (including functions, global
+    variables, and vtables/RTTI) established during loader analysis, they are
+    not expected to change once initial auto-analysis completes (symbol renames
+    are already tracked via live IDB rename hooks). Consequently,
+    `check_entries_freshness` defaults to `False` to avoid redundant checks.
+    When enabled, the query engine computes an in-memory fingerprint (`(qty,
+    ((ord, ea), ...))`) prior to executing queries against the `entries` table,
+    automatically refreshing the table if entry points have been dynamically
+    added or removed.
 *   **Rebase Detection & Invalidation**: Program rebase notifications
     (`segm_moved` / `allsegs_moved`) invalidate the database by draining pending
     updates and dropping all data tables.
