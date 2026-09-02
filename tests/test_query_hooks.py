@@ -402,5 +402,39 @@ class TestDBWorkerFunctionAndXrefSync(unittest.TestCase):
     self.assertIsNone(xref_map[ea_above])
 
 
+
+class TestDBUpdateIDPHooks(unittest.TestCase):
+  """Tests verifying that DBUpdateIDPHooks filters and pushes events."""
+
+  def setUp(self):
+    super().setUp()
+    _drain_queue()
+    sys.modules["idaapi"].fl_F = 21
+    self.hooks = query.DBUpdateIDPHooks()
+
+  def tearDown(self):
+    _drain_queue()
+    super().tearDown()
+
+  def test_ev_add_cref_skips_flow(self):
+    res = self.hooks.ev_add_cref(_from=0x1000, to=0x1004, xref_type=21)
+    self.assertEqual(res, 0)
+    self.assertTrue(query._db_update_queue.empty())
+
+  @mock.patch.object(query.helper, "get_func_bounds")
+  def test_ev_add_cref_enqueues_non_flow(self, mock_bounds):
+    mock_pfn = mock.MagicMock()
+    mock_pfn.start_ea = 0x1000
+    mock_bounds.return_value = mock_pfn
+
+    res = self.hooks.ev_add_cref(_from=0x1010, to=0x2000, xref_type=17)
+    self.assertEqual(res, 0)
+    self.assertFalse(query._db_update_queue.empty())
+    event = query._db_update_queue.get_nowait()
+    query._db_update_queue.task_done()
+    self.assertEqual(event, ("cref_added", 0x1010, 0x2000, 17, 0x1000))
+
+
 if __name__ == "__main__":
   unittest.main()
+

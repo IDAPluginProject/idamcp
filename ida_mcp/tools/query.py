@@ -1463,6 +1463,8 @@ class DBUpdateIDPHooks(ida_idp.IDP_Hooks):
       self, _from: int = 0, to: int = 0, xref_type: int = 0, *args: Any
   ) -> int:
     del args
+    if xref_type == idaapi.fl_F:
+      return 0
     bounds = helper.get_func_bounds(_from)
     from_function_ea = bounds.start_ea if bounds else None
     _db_update_queue.put(("cref_added", _from, to, xref_type, from_function_ea))
