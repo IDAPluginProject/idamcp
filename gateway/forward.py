@@ -153,6 +153,17 @@ class HeadlessManager:
     # database_id -> pid
     self.lru_queue: Deque[str] = collections.deque()
 
+  def touch(self, database_id: str) -> None:
+    """Mark a headless instance as recently used."""
+    if (
+        len(self.lru_queue) >= 2
+        and self.lru_queue[-1] != database_id
+        and database_id in self.lru_queue
+    ):
+      with contextlib.suppress(Exception):
+        self.lru_queue.remove(database_id)
+        self.lru_queue.append(database_id)
+
   def register(self, database_id: str, pid: int):
     """Register a new active headless instance."""
     if database_id in self.lru_queue:
@@ -162,7 +173,7 @@ class HeadlessManager:
     _global_database_id_to_pid[database_id] = pid
 
     if len(self.lru_queue) > self.max_instances:
-      _ = asyncio.create_task(self.evict_oldest())
+      _ = asyncio.create_task(self.evict_coldest())
 
   async def unregister(self, database_id: str):
     """Unregister a headless instance."""
@@ -226,12 +237,36 @@ class HeadlessManager:
     """Close a specific headless instance gracefully."""
     await disconnect_backend(database_id)
 
-  async def evict_oldest(self):
-    """Evict the oldest instance."""
-    if self.lru_queue:
-      oldest_id = self.lru_queue[0]
-      logging.info("[Headless] Evicting oldest instance: %s", oldest_id)
-      await self.close(oldest_id)
+  async def evict_coldest(self):
+    """Evict the coldest (least recently used) instance."""
+    if not self.lru_queue:
+      return
+
+    target_id: str | None = None
+
+    # First priority: check for broken or already-closed instances
+    for db_id in self.lru_queue:
+      state = _global_client_state.get(db_id)
+      if state and (state.is_closed or state.is_broken):
+        target_id = db_id
+        break
+
+    # Second priority: check for the coldest idle instance (no ongoing calls)
+    if target_id is None:
+      for db_id in self.lru_queue:
+        state = _global_client_state.get(db_id)
+        if state is None or state.number_of_ongoing_calls == 0:
+          target_id = db_id
+          break
+
+    # Fallback: evict the absolute coldest instance
+    if target_id is None:
+      target_id = self.lru_queue[0]
+
+    logging.info("[Headless] Evicting coldest instance: %s", target_id)
+    await self.close(target_id)
+    if target_id in self.lru_queue:
+      await self.unregister(target_id)
 
   async def spawn(self, path: str) -> DatabaseInfo:
     """Spawn a headless instance."""
@@ -254,7 +289,7 @@ class HeadlessManager:
 
     if len(self.lru_queue) >= self.max_instances:
       # We reached max instances, need to evict.
-      await self.evict_oldest()
+      await self.evict_coldest()
 
     # Determine command
     python_path = CONFIG.get("python_path", sys.executable)
@@ -500,7 +535,8 @@ async def disconnect_backend(backend_id: str, unregister: bool = True) -> None:
       _global_metadata.pop(backend_id, None)
     try:
       if client:
-        # If it is a headless instance opened by us, request graceful shutdown first
+        # If it is a headless instance opened by us, request graceful shutdown
+        # first
         if _global_database_id_to_pid.get(backend_id) is not None:
           try:
             logging.info(
@@ -578,6 +614,7 @@ async def forward_to(target: str, tool_name: str, args: dict[str, Any]) -> Any:
   logging.info(
       "[Gateway] forward_to started for target=%s, tool=%s", target, tool_name
   )
+  _headless_manager.touch(target)
   async with _global_client_state[target].condition:
     if _global_client_state[target].is_closed:
       logging.info("[Gateway] forward_to: database %s is closed", target)
@@ -641,6 +678,7 @@ async def forward_to(target: str, tool_name: str, args: dict[str, Any]) -> Any:
       )
       if _global_client_state[target].number_of_ongoing_calls == 0:
         _global_client_state[target].condition.notify_all()
+    _headless_manager.touch(target)
 
 
 def shutdown_clients() -> None:

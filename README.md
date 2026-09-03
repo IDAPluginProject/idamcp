@@ -362,8 +362,10 @@ PYTHONPATH=/path/to/project python3 -m ida_mcp.headless /path/to/binary_or_idb
 
 *Note: The `max_headless_instances` setting in `~/.idamcp.json` ensures the MCP
 client doesn't spawn too many resource-heavy IDA processes. If the limit is
-reached, the oldest session launched by the client is closed to make room for
-the new one. This setting does not affect manually launched headless instances.*
+reached, the coldest (least recently used) session launched by the client is
+evicted to make room for the new one (prioritizing idle or broken instances
+over actively used ones). This setting does not affect manually launched
+headless instances.*
 
 *(**Prompting Tip**: LLM clients may not inherently recognize the versatility
 and performance of `sql_query`, often defaulting to sequential, single-purpose
