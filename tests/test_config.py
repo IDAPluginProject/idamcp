@@ -128,21 +128,6 @@ class TestConfig(unittest.TestCase):
       config = shared.config.load_config(config_path="/nonexistent")
       self.assertTrue(config.get("sqlite_persistent"))
 
-  def test_duckdb_persistent_env_backward_compat(self):
-    """Test DUCKDB_PERSISTENT environment variable backward compatibility."""
-    with mock.patch.dict("os.environ", {"DUCKDB_PERSISTENT": "true"}):
-      config = shared.config.load_config(config_path="/nonexistent")
-      self.assertTrue(config.get("sqlite_persistent"))
-
-  def test_sqlite_persistent_precedence(self):
-    """Test that SQLITE_PERSISTENT takes precedence over DUCKDB_PERSISTENT."""
-    with mock.patch.dict(
-        "os.environ",
-        {"SQLITE_PERSISTENT": "false", "DUCKDB_PERSISTENT": "true"},
-    ):
-      config = shared.config.load_config(config_path="/nonexistent")
-      self.assertFalse(config.get("sqlite_persistent"))
-
   def test_check_entries_freshness_default(self):
     """Test default value for check_entries_freshness is False."""
     config = shared.config.load_config(config_path="/nonexistent")

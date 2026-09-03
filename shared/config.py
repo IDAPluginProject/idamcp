@@ -157,7 +157,6 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
   _set_option_from_env(config, "disabled_tools")
   _set_option_from_env(config, "proxy_port")
   _set_option_from_env(config, "proxy_host")
-  _set_option_from_env(config, "sqlite_persistent", "DUCKDB_PERSISTENT")
   _set_option_from_env(config, "sqlite_persistent")
   _set_option_from_env(config, "check_entries_freshness")
 
