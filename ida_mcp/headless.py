@@ -21,6 +21,7 @@
 """Headless IDA Pro MCP Server."""
 
 import argparse
+import contextlib
 import hashlib
 import logging
 import pathlib
@@ -45,19 +46,11 @@ logger = logging.getLogger(__name__)
 
 
 def _server_thread(hash_str: str) -> None:
-  # We run the server in the main thread for now.
-  # If idalib requires the main thread for API calls (via execute_sync),
-  # and uvicorn blocks it, we might have issues.
-  # However, since we are headless, the 'UI loop' concept is different.
-  # If this fails, we might need to thread the server.
-  # Given the Plugin uses a thread, let's try calling the function directly.
-  # If mcp_server_thread blocks (uvicorn.run), it will block here.
   logger.info("Starting MCP server...")
   ida_thread.wait_for_loop_event()
   try:
     mcp_server_thread(hash_str)
   finally:
-    # Ensure database is closed even if uvicorn exits gracefully (e.g. SIGINT)
     logger.info("Server stopped, closing database...")
     ida_thread.stop()
 
@@ -86,15 +79,10 @@ def main():
   except Exception as e:  # pylint: disable=broad-exception-caught
     logger.exception("Failed to open database, exception: %s", e)
     sys.exit(1)
-  # Generate a unique identifier for this session
-  # Using hash of the IDB path ensures consistency if re-opened?
-  # Or maybe just hash of input path if IDB isn't fully formed yet?
-  # idaapi.get_path(idaapi.PATH_TYPE_IDB) should be valid after open_database.
+
   idb_path = None
-  try:
+  with contextlib.suppress(Exception):
     idb_path = idaapi.get_path(idaapi.PATH_TYPE_IDB)
-  except:  # pylint: disable=broad-exception-caught
-    pass
 
   if not idb_path:
     # Fallback
