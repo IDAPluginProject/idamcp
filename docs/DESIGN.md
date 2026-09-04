@@ -314,29 +314,22 @@ ensure that every specific instance on the disk has a unique, stable identifier.
 This allows the Agent to distinguish between different analysis files even if
 they target the same executable.
 
-### 4.2 Headless Instance Lifecycle & Eviction Policy
+### 4.2 Headless Instance Lifecycle & Quota Policy
 
 When the MCP client opens a binary via `idalib_headless_open`, the Gateway's
-`HeadlessManager` spawns and tracks the background process. To prevent resource
-exhaustion while preserving active contexts, `HeadlessManager` implements a
-coldest-first (least recently used) eviction strategy when reaching
-`max_headless_instances`:
+`HeadlessManager` spawns and tracks the background process in
+`spawned_instances`. To prevent system resource exhaustion, `HeadlessManager`
+enforces a strict quota based on `max_headless_instances`:
 
-1.  **Recency Tracking**: Every tool call forwarded through `forward_to()`
-    touches the target instance, refreshing its position to the most recently
-    used (MRU) end of the LRU queue.
-2.  **Eviction Candidate Selection**:
-    *   **Broken or Closed Instances**: Instances marked as closed or with
-        broken connections are prioritized for eviction and immediate cleanup.
-    *   **Coldest Idle Instance**: The queue is inspected from coldest to
-        hottest for an instance with zero ongoing calls
-        (`number_of_ongoing_calls == 0`).
-    *   **Active Fallback**: If all instances currently have active calls in
-        flight, the manager falls back to evicting the absolute coldest
-        instance.
-3.  **Graceful Teardown**: Evicted instances receive a graceful
-    `close_database` RPC request before connection termination and process
-    shutdown.
+1.  **Quota Enforcement**: Before spawning a new headless instance, the manager
+    checks whether `len(self.spawned_instances) >= self.max_instances`.
+2.  **Explicit Actionable Error**: If the limit is reached,
+    `idalib_headless_open` raises a `ToolError` prompting the caller to close an
+    unused instance using `idalib_headless_close(database_id)` before opening a
+    new one.
+3.  **Clean Teardown**: When `idalib_headless_close` is invoked, the gateway
+    gracefully requests the database to save and close (`close_database`),
+    closes the RPC connection, and terminates the process.
 
 --------------------------------------------------------------------------------
 

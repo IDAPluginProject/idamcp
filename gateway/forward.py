@@ -32,7 +32,7 @@ import re
 import signal
 import subprocess
 import sys
-from typing import Annotated, Any, Deque, Mapping, NotRequired
+from typing import Annotated, Any, Mapping, NotRequired
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ResourceError
@@ -150,36 +150,17 @@ class HeadlessManager:
 
   def __init__(self, max_instances: int):
     self.max_instances = max_instances
-    # database_id -> pid
-    self.lru_queue: Deque[str] = collections.deque()
-
-  def touch(self, database_id: str) -> None:
-    """Mark a headless instance as recently used."""
-    if (
-        len(self.lru_queue) >= 2
-        and self.lru_queue[-1] != database_id
-        and database_id in self.lru_queue
-    ):
-      with contextlib.suppress(Exception):
-        self.lru_queue.remove(database_id)
-        self.lru_queue.append(database_id)
+    self.spawned_instances: set[str] = set()
 
   def register(self, database_id: str, pid: int):
     """Register a new active headless instance."""
-    if database_id in self.lru_queue:
-      self.lru_queue.remove(database_id)
-
-    self.lru_queue.append(database_id)
+    self.spawned_instances.add(database_id)
     _global_database_id_to_pid[database_id] = pid
-
-    if len(self.lru_queue) > self.max_instances:
-      _ = asyncio.create_task(self.evict_coldest())
 
   async def unregister(self, database_id: str):
     """Unregister a headless instance."""
     logging.info("[HeadlessManager] unregister started for %s", database_id)
-    if database_id in self.lru_queue:
-      self.lru_queue.remove(database_id)
+    self.spawned_instances.discard(database_id)
     pid = _global_database_id_to_pid.pop(database_id, None)
     if pid is not None and _is_process_running(pid):
       try:
@@ -237,37 +218,6 @@ class HeadlessManager:
     """Close a specific headless instance gracefully."""
     await disconnect_backend(database_id)
 
-  async def evict_coldest(self):
-    """Evict the coldest (least recently used) instance."""
-    if not self.lru_queue:
-      return
-
-    target_id: str | None = None
-
-    # First priority: check for broken or already-closed instances
-    for db_id in self.lru_queue:
-      state = _global_client_state.get(db_id)
-      if state and (state.is_closed or state.is_broken):
-        target_id = db_id
-        break
-
-    # Second priority: check for the coldest idle instance (no ongoing calls)
-    if target_id is None:
-      for db_id in self.lru_queue:
-        state = _global_client_state.get(db_id)
-        if state is None or state.number_of_ongoing_calls == 0:
-          target_id = db_id
-          break
-
-    # Fallback: evict the absolute coldest instance
-    if target_id is None:
-      target_id = self.lru_queue[0]
-
-    logging.info("[Headless] Evicting coldest instance: %s", target_id)
-    await self.close(target_id)
-    if target_id in self.lru_queue:
-      await self.unregister(target_id)
-
   async def spawn(self, path: str) -> DatabaseInfo:
     """Spawn a headless instance."""
     path = os.path.abspath(path)
@@ -287,9 +237,12 @@ class HeadlessManager:
               " directly.",
           )
 
-    if len(self.lru_queue) >= self.max_instances:
-      # We reached max instances, need to evict.
-      await self.evict_coldest()
+    if len(self.spawned_instances) >= self.max_instances:
+      raise ToolError(
+          f"Cannot open '{path}': Maximum number of headless IDA instances"
+          f" ({self.max_instances}) reached. Please close an unused instance"
+          " using idalib_headless_close before opening a new one."
+      )
 
     # Determine command
     python_path = CONFIG.get("python_path", sys.executable)
@@ -614,7 +567,6 @@ async def forward_to(target: str, tool_name: str, args: dict[str, Any]) -> Any:
   logging.info(
       "[Gateway] forward_to started for target=%s, tool=%s", target, tool_name
   )
-  _headless_manager.touch(target)
   async with _global_client_state[target].condition:
     if _global_client_state[target].is_closed:
       logging.info("[Gateway] forward_to: database %s is closed", target)
@@ -678,7 +630,6 @@ async def forward_to(target: str, tool_name: str, args: dict[str, Any]) -> Any:
       )
       if _global_client_state[target].number_of_ongoing_calls == 0:
         _global_client_state[target].condition.notify_all()
-    _headless_manager.touch(target)
 
 
 def shutdown_clients() -> None:
