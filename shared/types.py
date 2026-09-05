@@ -21,9 +21,14 @@
 """Type definitions for IDA-related data structures."""
 
 from dataclasses import dataclass, field
-from typing import (Annotated, Any, Generic, List, Literal, TypeVar)
-from typing_extensions import (
+from typing import (
+    Annotated,
+    Any,
+    Generic,
+    List,
+    Literal,
     NotRequired,
+    TypeVar,
     TypedDict,
 )
 
