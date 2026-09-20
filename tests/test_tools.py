@@ -37,6 +37,9 @@ import mcp
 import mcp.client.stdio
 from shared.config import load_config
 
+os.environ["IDAMCP_NO_USER_CONFIG"] = "1"
+load_config.cache_clear()
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -64,6 +67,32 @@ def _is_process_running(pid: int) -> bool:
       return True
     except OSError:
       return False
+
+
+def _is_error(resp: typing.Any) -> bool:
+  if hasattr(resp, "is_error"):
+    return resp.is_error
+  return getattr(resp, "isError", False)
+
+
+def _structured_content(resp: typing.Any) -> typing.Any:
+  if hasattr(resp, "structured_content"):
+    return resp.structured_content
+  return getattr(resp, "structuredContent", None)
+
+
+def _get_in_flight_request_id(session: typing.Any) -> typing.Any:
+  # MCP 1.x: BaseSession stores in-flight response streams in _response_streams
+  response_streams = getattr(session, "_response_streams", None)
+  if response_streams:
+    return list(response_streams.keys())[-1]
+  # MCP 2.x: JSONRPCDispatcher stores pending requests in _pending
+  dispatcher = getattr(session, "_dispatcher", None)
+  if dispatcher is not None:
+    pending = getattr(dispatcher, "_pending", {})
+    if pending:
+      return list(pending.keys())[-1]
+  return None
 
 
 def normalize_text(text: str) -> str:
@@ -119,6 +148,7 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
             PYTHONPATH=".",
             ENABLED_UNSAFE_TOOLS="idapython_eval",
             ENABLE_ALL_UNSAFE_TOOLS="true",
+            POPULATE_TABLES_ON_STARTUP="true",
         ),
     )
 
@@ -139,15 +169,16 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
     open_resp = await self.session.call_tool(
         "idalib_headless_open", {"path": abs_path}
     )
-    if open_resp.isError:
+    if _is_error(open_resp):
       raise RuntimeError(f"Failed to open database: {open_resp}")
-    self.db_id = open_resp.structuredContent["database_id"]
+    sc = _structured_content(open_resp)
+    self.db_id = sc["database_id"] if sc else None
     print(f"Database opened, ID: {self.db_id}")
 
     print("Waiting for database to be available...")
     for _ in range(50):
       dbs_resp = await self.session.call_tool("list_available_databases", {})
-      if not dbs_resp.isError:
+      if not _is_error(dbs_resp):
         db_list = json.loads(dbs_resp.content[0].text)
         if self.db_id in {db["database_id"] for db in db_list}:
           print("Database is available!")
@@ -162,13 +193,19 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
     print("Tearing down resources...")
     try:
       if self.db_id and self.session:
-        await self.session.call_tool(
-            "idalib_headless_close", {"database_id": self.db_id}
+        await asyncio.wait_for(
+            self.session.call_tool(
+                "idalib_headless_close", {"database_id": self.db_id}
+            ),
+            timeout=5.0,
         )
     except Exception as e:  # pylint: disable=broad-exception-caught
       print(f"Error closing database: {e}")
     finally:
-      await self.exit_stack.aclose()
+      try:
+        await asyncio.wait_for(self.exit_stack.aclose(), timeout=5.0)
+      except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"Error closing exit stack: {e}")
       if self.current_filepath:
         base_path = os.path.abspath(self.current_filepath)
         for ext in [".i64", ".id0", ".id1", ".id2", ".nam", ".til", ".db"]:
@@ -184,7 +221,7 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
   async def run_tool(self, tool_name: str, **kwargs) -> dict[str, typing.Any]:
     kwargs["database_id"] = self.db_id
     resp = await self.session.call_tool(tool_name, kwargs)
-    if resp.isError:
+    if _is_error(resp):
       raise RuntimeError(
           f"Tool {tool_name} failed:"
           f" {resp.content[0].text if resp.content else ''}"
@@ -197,10 +234,11 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
       except json.JSONDecodeError:
         return resp.content[0].text
 
-    if resp.structuredContent and "result" in resp.structuredContent:
-      return resp.structuredContent["result"]
+    sc = _structured_content(resp)
+    if sc and "result" in sc:
+      return sc["result"]
 
-    return resp.structuredContent
+    return sc
 
   async def switch_database(self, binary_name: str) -> str:
     # Close current if any
@@ -272,15 +310,16 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
     open_resp = await self.session.call_tool(
         "idalib_headless_open", {"path": abs_path}
     )
-    if open_resp.isError:
+    if _is_error(open_resp):
       raise RuntimeError(f"Failed to open database {binary_name}: {open_resp}")
-    self.db_id = open_resp.structuredContent["database_id"]
+    sc = _structured_content(open_resp)
+    self.db_id = sc["database_id"] if sc else None
     print(f"Database opened, ID: {self.db_id}")
 
     print("Waiting for database to be available...")
     for _ in range(50):
       dbs_resp = await self.session.call_tool("list_available_databases", {})
-      if not dbs_resp.isError:
+      if not _is_error(dbs_resp):
         db_list = json.loads(dbs_resp.content[0].text)
         if self.db_id in {db["database_id"] for db in db_list}:
           print("Database is available!")
@@ -2406,7 +2445,7 @@ hex(tid) if tid is not None else ""
         ("names", {"address", "name"}),
         ("imports", {"address", "name", "module"}),
     ]:
-      tbl_cols = await run_sql(f"SELECT * FROM pragma_table_info('{tbl}')")
+      tbl_cols = await run_sql(f"SELECT * FROM pragma_table_xinfo('{tbl}')")
       self.assertIsInstance(tbl_cols, list)
       col_names = {c["name"].lower() for c in tbl_cols}
       self.assertTrue(
@@ -2421,6 +2460,16 @@ hex(tid) if tid is not None else ""
       for row in tbl_rows:
         self.assertIn("address", row)
         self.assertTrue(row["address"].startswith("0x"))
+
+    # Also verify __internal_strings schema
+    internal_cols = await run_sql(
+        "SELECT * FROM pragma_table_info('__internal_strings')"
+    )
+    self.assertIsInstance(internal_cols, list)
+    col_names = {c["name"].lower() for c in internal_cols}
+    self.assertTrue(
+        {"start_ea", "end_ea", "length", "string"}.issubset(col_names)
+    )
 
     # 3. Verify Hexadecimal Literals parser (e.g. WHERE address = 0x1240)
     # Let's get rebased address of 'caller_func' first
@@ -3444,7 +3493,7 @@ print(f"REBASE RESULT: {rc}")
 
   async def verify_db_versioning_and_migration(self):
     """Verifies that DB version is set and database is migrated if version is old."""
-    # 1. Verify current version is 4 (target version)
+    # 1. Verify current version is 5 (target version)
     res_dict = await self.run_tool("sql_query", sql="PRAGMA user_version")
     self.assertIsInstance(res_dict, dict)
     self.assertIn("rows", res_dict)
@@ -3452,7 +3501,7 @@ print(f"REBASE RESULT: {rc}")
     res = res_dict["rows"]
     self.assertEqual(len(res), 1)
     self.assertIn("user_version", res[0])
-    self.assertEqual(res[0]["user_version"], "0x4")
+    self.assertEqual(res[0]["user_version"], "0x5")
 
     # Verify functions table exists and has data (triggered population)
     funcs_res = await self.run_tool(
@@ -3496,7 +3545,7 @@ print("DEBUG: Reset checked flag")
     await self.run_tool("idapython_eval", code=reset_code)
 
     # 3. Trigger a query. This should trigger migration (drop tables and views,
-    # set version to 4). We query sqlite_master to verify tables and views were
+    # set version to 5). We query sqlite_master to verify tables and views were
     # dropped.
     entities_res = await self.run_tool(
         "sql_query",
@@ -3520,16 +3569,17 @@ print("DEBUG: Reset checked flag")
         "local_types",
         "xrefs",
         "__internal_xrefs",
+        "__internal_strings",
     ]:
       self.assertNotIn(ent, entity_names)
 
-    # Now verify version is back to 4
+    # Now verify version is back to 5
     res_dict = await self.run_tool("sql_query", sql="PRAGMA user_version")
     self.assertIsInstance(res_dict, dict)
     self.assertIn("rows", res_dict)
     self.assertNotIn("error", res_dict)
     res = res_dict["rows"]
-    self.assertEqual(res[0]["user_version"], "0x4")
+    self.assertEqual(res[0]["user_version"], "0x5")
 
     # Now query functions again, it should trigger re-population and succeed
     funcs_res = await self.run_tool(
@@ -3651,23 +3701,32 @@ with q._db_write_lock:
         "WITH RECURSIVE cnt(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM cnt)"
         " SELECT count(*) FROM cnt CROSS JOIN cnt AS b"
     )
-    req_id = self.session._request_id
     query_task = asyncio.create_task(self.run_tool("sql_query", sql=heavy_sql))
     # Wait briefly for query execution to start in SQLite C code
     await asyncio.sleep(0.1)
 
-    # Cancel the in-flight query by sending MCP CancelledNotification
     start_time = time.time()
-    await self.session.send_notification(
-        mcp.types.CancelledNotification(
-            params=mcp.types.CancelledNotificationParams(
-                requestId=req_id, reason="Test cancellation"
+    # In MCP 1.x (FastMCP 3.x), ClientSession does not automatically send
+    # CancelledNotification upon task cancellation, so we send it explicitly.
+    req_id = _get_in_flight_request_id(self.session)
+    if req_id is not None and self.session is not None:
+      try:
+        await self.session.send_notification(
+            mcp.types.CancelledNotification(
+                params=mcp.types.CancelledNotificationParams(  # type: ignore[call-arg]
+                    requestId=req_id,  # type: ignore[call-arg]
+                    reason="Test cancellation",
+                )
             )
         )
-    )
+      except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"DEBUG: send_notification error: {e}")
+
+    # Cancel the client-side task so it does not hang awaiting an answer.
+    query_task.cancel()
     try:
       await query_task
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (asyncio.CancelledError, Exception) as e:  # pylint: disable=broad-exception-caught
       print(f"DEBUG: Cancelled query response: {e}")
     duration = time.time() - start_time
     print(f"Query cancelled and aborted in {duration:.2f}s")

@@ -21,6 +21,7 @@
 
 """Unit tests for the config module."""
 
+import os
 import unittest
 from unittest import mock
 import shared.config
@@ -30,9 +31,16 @@ class TestConfig(unittest.TestCase):
   """Tests for the load_config function."""
 
   def setUp(self):
+    self._orig_no_user_config = os.environ.get("IDAMCP_NO_USER_CONFIG")
+    if "IDAMCP_NO_USER_CONFIG" in os.environ:
+      del os.environ["IDAMCP_NO_USER_CONFIG"]
     shared.config.load_config.cache_clear()
 
   def tearDown(self):
+    if self._orig_no_user_config is not None:
+      os.environ["IDAMCP_NO_USER_CONFIG"] = self._orig_no_user_config
+    elif "IDAMCP_NO_USER_CONFIG" in os.environ:
+      del os.environ["IDAMCP_NO_USER_CONFIG"]
     shared.config.load_config.cache_clear()
 
   @mock.patch("shared.config.sys.platform", "linux")
@@ -138,6 +146,31 @@ class TestConfig(unittest.TestCase):
     with mock.patch.dict("os.environ", {"CHECK_ENTRIES_FRESHNESS": "true"}):
       config = shared.config.load_config(config_path="/nonexistent")
       self.assertTrue(config.get("check_entries_freshness"))
+
+  def test_no_user_config_env(self):
+    """Test that IDAMCP_NO_USER_CONFIG ignores user configuration files."""
+    with mock.patch.dict("os.environ", {"IDAMCP_NO_USER_CONFIG": "1"}):
+      with mock.patch(
+          "builtins.open",
+          mock.mock_open(read_data='{"communication_channel": "tcp"}'),
+      ):
+        with mock.patch("pathlib.Path.is_file", return_value=True):
+          config = shared.config.load_config()
+          self.assertEqual(
+              config["communication_channel"],
+              shared.config._DEFAULT_CONFIG["communication_channel"],
+          )
+
+  def test_idamcp_config_env(self):
+    """Test that IDAMCP_CONFIG loads custom configuration file."""
+    with mock.patch.dict("os.environ", {"IDAMCP_CONFIG": "/custom/path.json"}):
+      with mock.patch(
+          "builtins.open",
+          mock.mock_open(read_data='{"communication_channel": "tcp"}'),
+      ):
+        with mock.patch("pathlib.Path.is_file", return_value=True):
+          config = shared.config.load_config()
+          self.assertEqual(config["communication_channel"], "tcp")
 
 
 if __name__ == "__main__":

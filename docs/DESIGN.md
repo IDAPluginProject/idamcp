@@ -149,7 +149,9 @@ IDA Pro database state:
 
 *   **`functions`**: `name`, `demangled_name`, `start_ea`, `end_ea`, `size`,
     `prototype`, `is_lib`
-*   **`strings`**: `address`, `length`, `string`
+*   **`strings`**: `address`, `length`, `string` (view over
+    `__internal_strings(start_ea, end_ea, length, string)` for fast range
+    invalidation)
 *   **`names`**: `address`, `name`
 *   **`imports`**: `address`, `name`, `module`
 *   **`segments`**: `name`, `class`, `start_ea`, `end_ea`, `size`, `permissions`
@@ -323,15 +325,16 @@ enforces a strict quota based on `max_headless_instances`:
 
 1.  **Quota Enforcement**: Before spawning a new headless instance, the manager
     checks whether active and pending instances reach `max_instances`
-    (`len(self.spawned_instances) + self._pending_spawns >= self.max_instances`).
+    (`len(self.spawned_instances) + self._pending_spawns >=
+    self.max_instances`).
 2.  **Explicit Actionable Error**: If the limit is reached,
     `idalib_headless_open` raises a `ToolError` prompting the caller to close an
     unused instance using `idalib_headless_close(database_id)` before opening a
     new one.
 3.  **Clean Teardown**: When `idalib_headless_close` is invoked, the gateway
     immediately frees the capacity slot, gracefully requests the database to
-    save and close (`close_database`), closes the RPC connection, and
-    terminates the process asynchronously.
+    save and close (`close_database`), closes the RPC connection, and terminates
+    the process asynchronously.
 
 --------------------------------------------------------------------------------
 
