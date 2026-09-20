@@ -60,15 +60,28 @@ for module in MOCKED_MODULES:
 sys.modules.update(module_mocks)
 
 # Ensure IDB_Hooks and IDP_Hooks are valid base types
-sys.modules["ida_idp"].IDB_Hooks = type(
-    "IDB_Hooks", (), {"hook": lambda self: True, "unhook": lambda self: True}
+setattr(
+    sys.modules["ida_idp"],
+    "IDB_Hooks",
+    type(
+        "IDB_Hooks",
+        (),
+        {"hook": lambda self: True, "unhook": lambda self: True},
+    ),
 )
-sys.modules["ida_idp"].IDP_Hooks = type(
-    "IDP_Hooks", (), {"hook": lambda self: True, "unhook": lambda self: True}
+setattr(
+    sys.modules["ida_idp"],
+    "IDP_Hooks",
+    type(
+        "IDP_Hooks",
+        (),
+        {"hook": lambda self: True, "unhook": lambda self: True},
+    ),
 )
 # Prevent fallback file paths from MagicMock string conversions
-sys.modules["idaapi"].idb_path = None
+setattr(sys.modules["idaapi"], "idb_path", None)
 sys.modules["ida_loader"].get_path.return_value = None
+sys.modules["ida_nalt"].get_strtype_bpu.return_value = 1
 
 # pylint: disable=g-import-not-at-top
 from ida_mcp.tools import query
@@ -95,9 +108,36 @@ class TestDBUpdateHooks(unittest.TestCase):
     super().setUp()
     _drain_queue()
     self.hooks = query.DBUpdateHooks()
+    conn = query._get_rw_conn()
+    with query._db_write_lock:
+      conn.execute("DROP TABLE IF EXISTS __internal_strings")
+      conn.execute("""
+        CREATE TABLE __internal_strings (
+          start_ea INTEGER,
+          end_ea INTEGER,
+          length INTEGER,
+          string TEXT
+        )
+      """)
+      conn.execute("""
+        CREATE VIEW IF NOT EXISTS strings as SELECT start_ea AS address, length,
+          string from __internal_strings
+                   """)
+      conn.execute(
+          "CREATE INDEX IF NOT EXISTS idx_strings_range ON __internal_strings"
+          " (start_ea, end_ea, length)"
+      )
+      query._created_tables.add("strings")
+      query._created_tables.add("__internal_strings")
 
   def tearDown(self):
     _drain_queue()
+    with query._db_write_lock:
+      conn = query._get_rw_conn()
+      conn.execute("DROP TABLE IF EXISTS __internal_strings")
+      conn.execute("DROP VIEW IF EXISTS strings")
+      query._created_tables.discard("strings")
+      query._created_tables.discard("__internal_strings")
     super().tearDown()
 
   def test_set_func_start_enqueues_when_changed(self):
@@ -178,6 +218,106 @@ class TestDBUpdateHooks(unittest.TestCase):
     event = query._db_update_queue.get_nowait()
     query._db_update_queue.task_done()
     self.assertEqual(event, ("func_updated", 0x1000, dummy_info))
+
+  def test_byte_patched_in_function_ignored(self):
+    sys.modules["idc"].get_func_attr.return_value = (
+        0x1000  # belongs to a function
+    )
+    self.hooks.byte_patched(ea=0x1004, old_value=0x90)
+    self.assertTrue(query._db_update_queue.empty())
+
+  def test_byte_patched_not_in_strings_table_ignored(self):
+    sys.modules["idc"].get_func_attr.return_value = sys.modules["idc"].BADADDR
+    self.hooks.byte_patched(ea=0x2000, old_value=0x41)
+    self.assertTrue(query._db_update_queue.empty())
+
+  def test_byte_patched_in_strings_table_enqueues_string_updated(self):
+    conn = query._get_rw_conn()
+    with query._db_write_lock:
+      conn.execute(
+          "INSERT INTO __internal_strings VALUES (?, ?, ?, ?)",
+          (
+              query._to_signed_64(0x2000),
+              query._to_signed_64(0x200B),
+              11,
+              "hello world",
+          ),
+      )
+    sys.modules["idc"].get_func_attr.return_value = sys.modules["idc"].BADADDR
+    sys.modules["ida_bytes"].get_strlit_contents.return_value = b"hello world"
+    self.hooks.byte_patched(ea=0x2005, old_value=0x6F)
+
+    self.assertFalse(query._db_update_queue.empty())
+    event = query._db_update_queue.get_nowait()
+    query._db_update_queue.task_done()
+    self.assertEqual(
+        event, ("string_updated", 0x2000, 0x200B, "hello world", 11)
+    )
+
+  def test_byte_patched_empty_string_enqueues_deletion(self):
+    conn = query._get_rw_conn()
+    with query._db_write_lock:
+      conn.execute(
+          "INSERT INTO __internal_strings VALUES (?, ?, ?, ?)",
+          (
+              query._to_signed_64(0x2000),
+              query._to_signed_64(0x200B),
+              11,
+              "hello world",
+          ),
+      )
+    sys.modules["idc"].get_func_attr.return_value = sys.modules["idc"].BADADDR
+    sys.modules["ida_bytes"].get_strlit_contents.return_value = b""
+    self.hooks.byte_patched(ea=0x2000, old_value=0x41)
+
+    self.assertFalse(query._db_update_queue.empty())
+    event = query._db_update_queue.get_nowait()
+    query._db_update_queue.task_done()
+    self.assertEqual(event, ("string_updated", 0x2000, 0x2000, "", 0))
+
+  def test_byte_patched_strtype_none_enqueues_deletion(self):
+    conn = query._get_rw_conn()
+    with query._db_write_lock:
+      conn.execute(
+          "INSERT INTO __internal_strings VALUES (?, ?, ?, ?)",
+          (
+              query._to_signed_64(0x2000),
+              query._to_signed_64(0x200B),
+              11,
+              "hello world",
+          ),
+      )
+    sys.modules["idc"].get_func_attr.return_value = sys.modules["idc"].BADADDR
+    sys.modules["idc"].get_str_type.return_value = None
+    self.hooks.byte_patched(ea=0x2000, old_value=0x41)
+
+    self.assertFalse(query._db_update_queue.empty())
+    event = query._db_update_queue.get_nowait()
+    query._db_update_queue.task_done()
+    self.assertEqual(event, ("string_updated", 0x2000, 0x2000, None, 0))
+    # Reset mock
+    sys.modules["idc"].get_str_type.return_value = 0
+
+  def test_byte_patched_none_marks_strings_dirty(self):
+    conn = query._get_rw_conn()
+    with query._db_write_lock:
+      conn.execute(
+          "INSERT INTO __internal_strings VALUES (?, ?, ?, ?)",
+          (
+              query._to_signed_64(0x2000),
+              query._to_signed_64(0x200B),
+              11,
+              "hello world",
+          ),
+      )
+    sys.modules["idc"].get_func_attr.return_value = sys.modules["idc"].BADADDR
+    query._strings_dirty = False
+
+    sys.modules["ida_bytes"].get_strlit_contents.return_value = None
+    self.hooks.byte_patched(ea=0x2000, old_value=0x41)
+
+    self.assertTrue(query._strings_dirty)
+    self.assertTrue(query._db_update_queue.empty())
 
 
 class TestDBWorkerFunctionAndXrefSync(unittest.TestCase):
@@ -383,12 +523,22 @@ class TestDBWorkerFunctionAndXrefSync(unittest.TestCase):
     # 4. xref above function (0x8000_0000_0000_0020)
     ea_above = query._to_signed_64(0x8000000000000020)
 
-    self.conn.execute("INSERT INTO xrefs VALUES (?, 8000, 'call', NULL)", (ea_below,))
-    self.conn.execute("INSERT INTO xrefs VALUES (?, 8000, 'call', NULL)", (ea_in_pos,))
-    self.conn.execute("INSERT INTO xrefs VALUES (?, 8000, 'call', NULL)", (ea_in_neg,))
-    self.conn.execute("INSERT INTO xrefs VALUES (?, 8000, 'call', NULL)", (ea_above,))
+    self.conn.execute(
+        "INSERT INTO xrefs VALUES (?, 8000, 'call', NULL)", (ea_below,)
+    )
+    self.conn.execute(
+        "INSERT INTO xrefs VALUES (?, 8000, 'call', NULL)", (ea_in_pos,)
+    )
+    self.conn.execute(
+        "INSERT INTO xrefs VALUES (?, 8000, 'call', NULL)", (ea_in_neg,)
+    )
+    self.conn.execute(
+        "INSERT INTO xrefs VALUES (?, 8000, 'call', NULL)", (ea_above,)
+    )
 
-    info = query.FuncInfo(signed_start, signed_end, "straddle_func", None, None, 32, 0)
+    info = query.FuncInfo(
+        signed_start, signed_end, "straddle_func", None, None, 32, 0
+    )
     query._db_update_queue.put(("func_added", start_ea, end_ea, info))
     query._db_update_queue.join()
 
@@ -401,6 +551,108 @@ class TestDBWorkerFunctionAndXrefSync(unittest.TestCase):
     self.assertEqual(xref_map[ea_in_neg], signed_start)
     self.assertIsNone(xref_map[ea_above])
 
+  def test_string_updated_updates_string_table(self):
+    with query._db_write_lock:
+      self.conn.execute("DROP VIEW IF EXISTS strings")
+      self.conn.execute("DROP TABLE IF EXISTS __internal_strings")
+      self.conn.execute("""
+        CREATE TABLE __internal_strings (
+          start_ea INTEGER,
+          end_ea INTEGER,
+          length INTEGER,
+          string TEXT
+        )
+      """)
+      self.conn.execute("""
+        CREATE VIEW IF NOT EXISTS strings AS SELECT start_ea AS address,
+          length, string FROM __internal_strings
+      """)
+      query._created_tables.add("strings")
+      query._created_tables.add("__internal_strings")
+      self.conn.execute(
+          "INSERT INTO __internal_strings VALUES (?, ?, ?, ?)",
+          (
+              query._to_signed_64(0x2000),
+              query._to_signed_64(0x2005),
+              5,
+              "hello",
+          ),
+      )
+
+    query._db_update_queue.put(
+        ("string_updated", 0x2000, 0x200D, "world_updated", 13)
+    )
+    query._db_update_queue.join()
+
+    cursor = self.conn.cursor()
+    cursor.execute(
+        "SELECT start_ea, end_ea, length, string FROM __internal_strings WHERE"
+        " start_ea = ?",
+        (query._to_signed_64(0x2000),),
+    )
+    row = cursor.fetchone()
+    self.assertEqual(
+        row,
+        (
+            query._to_signed_64(0x2000),
+            query._to_signed_64(0x200D),
+            13,
+            "world_updated",
+        ),
+    )
+    cursor.execute(
+        "SELECT address, length, string FROM strings WHERE address = ?",
+        (query._to_signed_64(0x2000),),
+    )
+    row_view = cursor.fetchone()
+    self.assertEqual(
+        row_view,
+        (
+            query._to_signed_64(0x2000),
+            13,
+            "world_updated",
+        ),
+    )
+
+  def test_string_updated_empty_string_deletes_row(self):
+    with query._db_write_lock:
+      self.conn.execute("DROP VIEW IF EXISTS strings")
+      self.conn.execute("DROP TABLE IF EXISTS __internal_strings")
+      self.conn.execute("""
+        CREATE TABLE __internal_strings (
+          start_ea INTEGER,
+          end_ea INTEGER,
+          length INTEGER,
+          string TEXT
+        )
+      """)
+      self.conn.execute("""
+        CREATE VIEW IF NOT EXISTS strings AS SELECT start_ea AS address,
+          length, string FROM __internal_strings
+      """)
+      query._created_tables.add("strings")
+      query._created_tables.add("__internal_strings")
+      self.conn.execute(
+          "INSERT INTO __internal_strings VALUES (?, ?, ?, ?)",
+          (
+              query._to_signed_64(0x2000),
+              query._to_signed_64(0x2005),
+              5,
+              "hello",
+          ),
+      )
+
+    query._db_update_queue.put(("string_updated", 0x2000, 0x2000, "", 0))
+    query._db_update_queue.join()
+
+    cursor = self.conn.cursor()
+    cursor.execute(
+        "SELECT start_ea, length, string FROM __internal_strings WHERE"
+        " start_ea = ?",
+        (query._to_signed_64(0x2000),),
+    )
+    row = cursor.fetchone()
+    self.assertIsNone(row)
 
 
 class TestDBUpdateIDPHooks(unittest.TestCase):
@@ -409,7 +661,7 @@ class TestDBUpdateIDPHooks(unittest.TestCase):
   def setUp(self):
     super().setUp()
     _drain_queue()
-    sys.modules["idaapi"].fl_F = 21
+    setattr(sys.modules["idaapi"], "fl_F", 21)
     self.hooks = query.DBUpdateIDPHooks()
 
   def tearDown(self):
@@ -437,4 +689,3 @@ class TestDBUpdateIDPHooks(unittest.TestCase):
 
 if __name__ == "__main__":
   unittest.main()
-

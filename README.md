@@ -275,8 +275,10 @@ example of all available settings (showing defaults):
 <details>
 <summary><b>Environment Variables</b></summary>
 
-You can override certain configuration settings using environment variables:
-
+*   **IDAMCP_CONFIG**: Path to a custom configuration file.
+*   **IDAMCP_NO_USER_CONFIG**: Set to `true`, `1`, or `yes` to ignore user
+    configuration files (`~/.idamcp.*`) and use default settings (useful in CI
+    or test suites).
 *   **POPULATE_TABLES_ON_STARTUP**: Set to `true`, `1`, or `yes` to enable table
     population at startup.
 *   **SQLITE_PERSISTENT**: Set to `true`, `1`, or `yes` to enable persistent

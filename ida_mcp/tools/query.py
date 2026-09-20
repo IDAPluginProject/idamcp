@@ -35,6 +35,7 @@ import time
 import traceback
 from typing import Any, Iterable, Tuple
 import ida_auto
+import ida_bytes
 import ida_entry
 import ida_funcs
 import ida_idp
@@ -120,6 +121,10 @@ def _to_signed_64(val: int) -> int:
   return val if val < 0x8000000000000000 else val - 0x10000000000000000
 
 
+def _from_signed_64(val: int) -> int:
+  return val if val >= 0 else val + 0x10000000000000000
+
+
 def _ea_range_clause(
     col: str, start_ea: int, end_ea: int
 ) -> tuple[str, tuple[int, int]]:
@@ -188,8 +193,8 @@ def _get_stored_min_ea(conn: sqlite3.Connection) -> int | None:
 def _check_and_migrate_db(conn: sqlite3.Connection) -> None:
   """Checks user_version and image_min_ea; migrates (recreates) DB if outdated.
 
-  Version 4.0 (represented as integer 4) anchors the table schema.
-  If target_version is older than 4 or if the recorded image_min_ea has changed,
+  Version 5.0 (represented as integer 5) anchors the table schema.
+  If target_version is older than 5 or if the recorded image_min_ea has changed,
   all tables are dropped and re-created from scratch.
 
   Args:
@@ -200,7 +205,7 @@ def _check_and_migrate_db(conn: sqlite3.Connection) -> None:
     row = cursor.fetchone()
     current_version = row[0] if row else 0
 
-    target_version = 4
+    target_version = 5
     stored_min_ea = _get_stored_min_ea(conn)
 
     needs_migration = (
@@ -245,7 +250,7 @@ def _check_and_migrate_db(conn: sqlite3.Connection) -> None:
         raise
     else:
       tables = conn.execute(
-          "SELECT name FROM sqlite_master WHERE type='table'"
+          "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
       ).fetchall()
       _created_tables.update(
           t[0].lower() for t in tables if t[0].lower() != "_db_metadata"
@@ -476,24 +481,37 @@ def populate_strings():
     for item in idautils.Strings():
       if item is None:
         continue
+      bpu = ida_nalt.get_strtype_bpu(item.strtype)
+      end_ea = item.ea + (item.length * bpu)
       yield (
           _to_signed_64(item.ea),
+          _to_signed_64(end_ea),
           item.length,
           str(item),
       )
 
+  with _db_write_lock:
+    conn = _get_rw_conn()
+    conn.execute("DROP VIEW IF EXISTS strings")
+
   _recreate_and_insert(
-      "strings",
-      "address INTEGER, length INTEGER, string TEXT",
+      "__internal_strings",
+      "start_ea INTEGER, end_ea INTEGER, length INTEGER, string TEXT",
       _gen(),
-      column_count=3,
+      column_count=4,
   )
   with _db_write_lock:
     conn = _get_rw_conn()
     conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_strings_addr ON strings (address,"
-        " length)"
+        "CREATE INDEX IF NOT EXISTS idx_strings_range ON __internal_strings"
+        " (start_ea, end_ea, length)"
     )
+    conn.execute("DROP VIEW IF EXISTS strings")
+    conn.execute(
+        "CREATE VIEW IF NOT EXISTS strings AS SELECT start_ea AS address,"
+        " length, string FROM __internal_strings"
+    )
+    _created_tables.add("strings")
   _strings_dirty = False
 
 
@@ -631,7 +649,7 @@ def _get_local_type_info(ordinal: int) -> LocalTypeInfo | None:
   return LocalTypeInfo(
       ordinal=ordinal,
       name=type_name,
-      declaration=c_decl_output or None,
+      declaration=c_decl_output or None,  # type: ignore[arg-type]
   )
 
 
@@ -811,7 +829,6 @@ def populate_entries():
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_entries_ordinal ON entries (ordinal)"
     )
-    _created_tables.add("entries")
 
   _entries_fingerprint = (len(fingerprint_items), tuple(fingerprint_items))
 
@@ -883,14 +900,18 @@ def sql_query(
               # pylint: disable=used-prior-global-declaration
               @idaread
               def ask_buttons() -> int:
-                return ida_kernwin.ask_buttons(
-                    "Update",
-                    "No",
-                    "Don't Ask Again",
-                    1,
-                    "IDB patches detected. Your 'strings' table may be out of"
-                    " sync.\n\nWould you like to re-index it now?",
-                )
+                batch_mode = idc.batch(0)
+                try:
+                  return ida_kernwin.ask_buttons(
+                      "Update",
+                      "No",
+                      "Don't Ask Again",
+                      1,
+                      "IDB patches detected. Your 'strings' table may be out of"
+                      " sync.\n\nWould you like to re-index it now?",
+                  )
+                finally:
+                  idc.batch(batch_mode)
 
               btn_choice = ask_buttons()
               if btn_choice == 1:
@@ -953,9 +974,19 @@ def _db_worker():
       if action == "rebase_invalidation":
         with _db_write_lock:
           conn = _get_rw_conn()
-          for table in list(_created_tables):
-            conn.execute(f'DROP TABLE IF EXISTS "{table}"')
-          _created_tables.clear()
+          try:
+            entities = conn.execute(
+                "SELECT type, name FROM sqlite_master WHERE type IN ('table',"
+                " 'view') AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+            for ent_type, name in entities:
+              if ent_type == "view":
+                conn.execute(f'DROP VIEW IF EXISTS "{name}"')
+              elif ent_type == "table":
+                conn.execute(f'DROP TABLE IF EXISTS "{name}"')
+            _created_tables.clear()
+          except Exception as e:  # pylint: disable=broad-exception-caught
+            logging.exception("Error during rebase_invalidation: %s", e)
         continue
 
       if action == "rebase_completed":
@@ -1253,6 +1284,23 @@ def _db_worker():
                         _to_signed_64(to_ea),
                     ),
                 )
+
+            case "string_updated":
+              start_ea, new_end_ea, new_content, new_length = event[1:5]
+              if _table_exists("__internal_strings"):
+                signed_start = _to_signed_64(start_ea)
+                signed_new_end = _to_signed_64(new_end_ea)
+                if not new_content:
+                  cursor.execute(
+                      "DELETE FROM __internal_strings WHERE start_ea = ?",
+                      (signed_start,),
+                  )
+                else:
+                  cursor.execute(
+                      "UPDATE __internal_strings SET string = ?, length = ?,"
+                      " end_ea = ? WHERE start_ea = ?",
+                      (new_content, new_length, signed_new_end, signed_start),
+                  )
         except Exception as e:  # pylint: disable=broad-exception-caught
           logging.exception("DB update error for event %s: %s", action, e)
         finally:
@@ -1442,9 +1490,56 @@ class DBUpdateHooks(ida_idp.IDB_Hooks):
   def byte_patched(
       self, ea: "idaapi.ea_t" = 0, old_value: int = 0, *args: Any
   ) -> None:
-    del ea, old_value, args
+    del old_value, args
     global _strings_dirty
-    _strings_dirty = True
+    if not _table_exists("__internal_strings"):
+      return
+
+    if idc.get_func_attr(ea, idc.FUNCATTR_START) != idc.BADADDR:
+      return
+
+    # A string may not be a defined item, we can't use ida_bytes.get_item_head
+    # to get the start address of the string.
+    signed_ea = _to_signed_64(ea)
+    try:
+      cursor = _get_ro_conn().cursor()
+      cursor.execute(
+          "SELECT start_ea, end_ea, length, string FROM __internal_strings"
+          " WHERE start_ea <= ? AND end_ea > ? ORDER BY start_ea DESC LIMIT 1",
+          (signed_ea, signed_ea),
+      )
+      row = cursor.fetchone()
+    except (sqlite3.OperationalError, sqlite3.DatabaseError):
+      _strings_dirty = True
+      return
+
+    if not row:
+      _strings_dirty = True
+      return
+
+    start_ea, end_ea, _, _ = row
+    start_ea = _from_signed_64(start_ea)
+    strtype = idc.get_str_type(start_ea)
+    if strtype is None:
+      new_content = None
+      new_length = 0
+      new_end_ea = start_ea
+    else:
+      end_ea = _from_signed_64(end_ea)
+      raw = ida_bytes.get_strlit_contents(start_ea, end_ea - start_ea, strtype)
+      if raw is None:
+        raw = ida_bytes.get_strlit_contents(start_ea, -1, strtype)
+      if raw is None:
+        _strings_dirty = True
+        return
+
+      new_content = raw.decode("utf-8", "replace") if raw else ""
+      new_length = len(new_content)
+      bpu = ida_nalt.get_strtype_bpu(strtype)
+      new_end_ea = start_ea + (new_length * bpu)
+    _db_update_queue.put(
+        ("string_updated", start_ea, new_end_ea, new_content, new_length)
+    )
 
   def allsegs_moved(self, info=None, *args: Any) -> None:
     del info, args
@@ -1500,9 +1595,9 @@ class DBUpdateIDPHooks(ida_idp.IDP_Hooks):
       _db_update_queue.put(("dref_deleted", _from, to))
     return 0
 
-  def ev_auto_queue_empty(self, type: "atype_t" = None, *args: Any) -> int:
+  def ev_auto_queue_empty(self, _type: int | None = None, *args: Any) -> int:
     """One analysis queue is empty."""
-    del type, args
+    del _type, args
     _complete_rebase_if_auto_ok()
     return 0
 

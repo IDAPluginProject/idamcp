@@ -104,23 +104,32 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
   """
 
   if config_path is None:
-    path = pathlib.Path("~/.idamcp.json").expanduser()
-    if not path.is_file():
-      for legacy_name in (
-          "~/.idamcp.toml",
-          "~/.idamcp.yml",
-          "~/.idamcp.yaml",
-      ):
-        legacy_path = pathlib.Path(legacy_name).expanduser()
-        if legacy_path.is_file():
-          path = legacy_path
-          break
+    if os.environ.get("IDAMCP_NO_USER_CONFIG", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
+      path = None
+    elif env_config := os.environ.get("IDAMCP_CONFIG"):
+      path = pathlib.Path(env_config).expanduser()
+    else:
+      path = pathlib.Path("~/.idamcp.json").expanduser()
+      if not path.is_file():
+        for legacy_name in (
+            "~/.idamcp.toml",
+            "~/.idamcp.yml",
+            "~/.idamcp.yaml",
+        ):
+          legacy_path = pathlib.Path(legacy_name).expanduser()
+          if legacy_path.is_file():
+            path = legacy_path
+            break
   else:
     path = pathlib.Path(config_path).expanduser()
 
   config = _DEFAULT_CONFIG.copy()
 
-  if path.is_file():
+  if path is not None and path.is_file():
     try:
       with open(path, "r") as f:
         config_str = f.read()
