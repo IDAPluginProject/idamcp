@@ -1519,24 +1519,22 @@ class DBUpdateHooks(ida_idp.IDB_Hooks):
 
     start_ea, end_ea, _, _ = row
     start_ea = _from_signed_64(start_ea)
-    strtype = idc.get_str_type(start_ea)
-    if strtype is None:
-      new_content = None
-      new_length = 0
-      new_end_ea = start_ea
-    else:
-      end_ea = _from_signed_64(end_ea)
-      raw = ida_bytes.get_strlit_contents(start_ea, end_ea - start_ea, strtype)
-      if raw is None:
-        raw = ida_bytes.get_strlit_contents(start_ea, -1, strtype)
+    end_ea = _from_signed_64(end_ea)
+    strtype = idc.get_str_type(start_ea) or 0
+    raw = ida_bytes.get_strlit_contents(start_ea, end_ea - start_ea, strtype)
+    if raw is None:
+      raw = ida_bytes.get_strlit_contents(start_ea, -1, strtype)
       if raw is None:
         _strings_dirty = True
         return
 
-      new_content = raw.decode("utf-8", "replace") if raw else ""
-      new_length = len(new_content)
-      bpu = ida_nalt.get_strtype_bpu(strtype)
-      new_end_ea = start_ea + (new_length * bpu)
+    new_content = raw.decode("utf-8", "replace")
+    new_length = len(new_content)
+    bpu = ida_nalt.get_strtype_bpu(strtype)
+    new_end_ea = start_ea + (new_length * bpu)
+    if new_end_ea != end_ea:
+      _strings_dirty = True
+      return
     _db_update_queue.put(
         ("string_updated", start_ea, new_end_ea, new_content, new_length)
     )
