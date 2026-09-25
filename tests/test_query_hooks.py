@@ -254,7 +254,7 @@ class TestDBUpdateHooks(unittest.TestCase):
         event, ("string_updated", 0x2000, 0x200B, "hello world", 11)
     )
 
-  def test_byte_patched_empty_string_enqueues_deletion(self):
+  def test_byte_patched_length_changed_marks_strings_dirty(self):
     conn = query._get_rw_conn()
     with query._db_write_lock:
       conn.execute(
@@ -267,15 +267,14 @@ class TestDBUpdateHooks(unittest.TestCase):
           ),
       )
     sys.modules["idc"].get_func_attr.return_value = sys.modules["idc"].BADADDR
+    query._strings_dirty = False
     sys.modules["ida_bytes"].get_strlit_contents.return_value = b""
     self.hooks.byte_patched(ea=0x2000, old_value=0x41)
 
-    self.assertFalse(query._db_update_queue.empty())
-    event = query._db_update_queue.get_nowait()
-    query._db_update_queue.task_done()
-    self.assertEqual(event, ("string_updated", 0x2000, 0x2000, "", 0))
+    self.assertTrue(query._strings_dirty)
+    self.assertTrue(query._db_update_queue.empty())
 
-  def test_byte_patched_strtype_none_enqueues_deletion(self):
+  def test_byte_patched_strtype_none_uses_default_strtype(self):
     conn = query._get_rw_conn()
     with query._db_write_lock:
       conn.execute(
@@ -289,12 +288,16 @@ class TestDBUpdateHooks(unittest.TestCase):
       )
     sys.modules["idc"].get_func_attr.return_value = sys.modules["idc"].BADADDR
     sys.modules["idc"].get_str_type.return_value = None
-    self.hooks.byte_patched(ea=0x2000, old_value=0x41)
+    sys.modules["ida_bytes"].get_strlit_contents.return_value = b"hello world"
+    self.hooks.byte_patched(ea=0x2005, old_value=0x6F)
 
     self.assertFalse(query._db_update_queue.empty())
     event = query._db_update_queue.get_nowait()
     query._db_update_queue.task_done()
-    self.assertEqual(event, ("string_updated", 0x2000, 0x2000, None, 0))
+    self.assertEqual(
+        event, ("string_updated", 0x2000, 0x200B, "hello world", 11)
+    )
+    sys.modules["ida_bytes"].get_strlit_contents.assert_called_with(0x2000, 11, 0)
     # Reset mock
     sys.modules["idc"].get_str_type.return_value = 0
 
