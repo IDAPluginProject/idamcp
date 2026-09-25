@@ -20,6 +20,7 @@
 
 """MCP Server implementation."""
 
+import contextlib
 import functools
 import inspect
 import json
@@ -28,6 +29,7 @@ import os
 import pathlib
 import sys
 import tempfile
+import threading
 
 # Add project root to sys.path if needed to find gateway
 root_dir = pathlib.Path(__file__).resolve().parent.parent
@@ -51,7 +53,6 @@ import ida_mcp.tools.memory
 import ida_mcp.tools.query
 import ida_mcp.tools.types
 
-from ida_mcp.utils import helper
 from shared.config import load_config
 from shared.types import Metadata
 
@@ -86,6 +87,26 @@ class Unbuffered:
 
 
 logger = logging.getLogger(__name__)
+
+_running_servers: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Event]] = (
+    {}
+)
+_servers_lock = threading.Lock()
+
+
+def stop_server(identifier: str | None = None) -> None:
+  """Signals running MCP server(s) to shut down cleanly."""
+  with _servers_lock:
+    if identifier:
+      entry = _running_servers.pop(identifier, None)
+      targets = [entry] if entry else []
+    else:
+      targets = list(_running_servers.values())
+      _running_servers.clear()
+
+  for loop, stop_event in targets:
+    if loop.is_running() and not stop_event.is_set():
+      loop.call_soon_threadsafe(stop_event.set)
 
 
 def _print_metadata(metadata: Metadata, identifier: str) -> None:
@@ -183,26 +204,42 @@ def mcp_server_thread(identifier: str):
   _print_metadata(metadata, identifier)
 
   async def main():
-    server = RPCServer(methods)
-    if channel == "tcp":
-      srv = await server.start_tcp("127.0.0.1", 0)
-      port = srv.sockets[0].getsockname()[1]
-      registry.register("tcp", port, name=identifier, metadata=metadata)
-    else:
-      uds_dir = config["uds_dir"]
-      socket_path = os.path.join(uds_dir, f"{identifier}.sock")
-      if os.path.exists(socket_path):
-        try:
-          os.unlink(socket_path)
-        except OSError:
-          pass
-      await server.start_uds(socket_path)
-      registry.register("uds", socket_path, name=identifier, metadata=metadata)
+    server = None
+    socket_path = None
+    stop_event = asyncio.Event()
+
+    with _servers_lock:
+      _running_servers[identifier] = (loop, stop_event)
 
     try:
-      await asyncio.Event().wait()
+      server = RPCServer(methods)
+      if channel == "tcp":
+        srv = await server.start_tcp("127.0.0.1", 0)
+        port = srv.sockets[0].getsockname()[1]
+        registry.register("tcp", port, name=identifier, metadata=metadata)
+      else:
+        uds_dir = config["uds_dir"]
+        socket_path = os.path.join(uds_dir, f"{identifier}.sock")
+        if os.path.exists(socket_path):
+          with contextlib.suppress(OSError):
+            os.unlink(socket_path)
+        await server.start_uds(socket_path)
+        registry.register(
+            "uds", socket_path, name=identifier, metadata=metadata
+        )
+
+      await stop_event.wait()
     except asyncio.CancelledError:
-      await server.close()
+      pass
+    finally:
+      with _servers_lock:
+        _running_servers.pop(identifier, None)
+      if server is not None:
+        await server.close()
+      registry.cleanup()
+      if socket_path and os.path.exists(socket_path):
+        with contextlib.suppress(OSError):
+          os.unlink(socket_path)
 
   loop = asyncio.new_event_loop()
   asyncio.set_event_loop(loop)

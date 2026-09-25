@@ -38,6 +38,11 @@ class SecurityManager:
     self.enable_all_unsafe_tools = False
     self.enabled_unsafe_tools: Set[str] = set()
 
+  def reset(self) -> None:
+    """Reset security settings to uninitialized defaults."""
+    self.enable_all_unsafe_tools = False
+    self.enabled_unsafe_tools.clear()
+
   def load_defaults(self, config: dict[str, Any]):
     """Load defaults from global config file."""
     self.enable_all_unsafe_tools = config.get("enable_all_unsafe_tools", False)

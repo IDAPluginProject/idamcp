@@ -701,6 +701,14 @@ def list_strings(
   return Page(data=strings, next_offset=next_offset)
 
 
+def clear_caches() -> None:
+  """Clears all iterator pagination caches."""
+  _function_iterator_cache.clear()
+  _global_iterator_cache.clear()
+  _import_iterator_cache.clear()
+  _string_iterator_cache.clear()
+
+
 @jsonrpc
 @idaread
 def list_segments() -> list[Segment]:

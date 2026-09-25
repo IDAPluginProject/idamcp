@@ -89,9 +89,15 @@ class RegistryManager:
 
   def cleanup(self) -> None:
     """Removes the registry file."""
+    with contextlib.suppress(Exception):
+      atexit.unregister(self.cleanup)
     if self.current_file and self.current_file.exists():
       try:
         self.current_file.unlink()
-        logging.info(f"Removed registry file: %s", str(self.current_file))
+        logging.info("Removed registry file: %s", str(self.current_file))
       except Exception as e:  # pylint: disable=broad-exception-caught
-        logging.exception(f"Failed to remove registry file: %s", str(e))
+        logging.exception("Failed to remove registry file: %s", str(e))
+      finally:
+        self.current_file = None
+    else:
+      self.current_file = None

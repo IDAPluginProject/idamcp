@@ -39,6 +39,7 @@ except ImportError:
 import idaapi
 from ida_mcp.core import ida_thread
 from ida_mcp.server import mcp_server_thread
+from ida_mcp.server import stop_server
 # fmt: on
 
 
@@ -118,6 +119,9 @@ def main():
   try:
     ida_thread.loop()
   finally:
+    stop_server(hash_str)
+    if server_thread.is_alive():
+      server_thread.join(timeout=5.0)
     try:
       idapro.close_database()
     except Exception as e:  # pylint: disable=broad-exception-caught
