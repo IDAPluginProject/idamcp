@@ -34,6 +34,7 @@ import threading
 import time
 import traceback
 from typing import Any, Iterable, Tuple
+import weakref
 import ida_auto
 import ida_bytes
 import ida_entry
@@ -75,8 +76,88 @@ def interruptible_sqlite(conn: sqlite3.Connection):
       raise
 
 
+class SQLiteConnectionLocal(threading.local):
+  """A thread-local container that tracks SQLite connections.
+
+  threading.local invokes __init__() once per thread when the thread first
+  accesses an attribute on this instance. SQLiteConnectionLocal leverages this
+  to record every thread's local namespace dictionary, and intercepts
+  __setattr__() to automatically record any sqlite3.Connection stored on it.
+  """
+
+  _class_lock = threading.Lock()
+  _all_instances: weakref.WeakSet["SQLiteConnectionLocal"] = weakref.WeakSet()
+
+  def __new__(cls, *args, **kwargs):
+    inst = super().__new__(cls)
+    object.__setattr__(inst, "_lock", threading.Lock())
+    object.__setattr__(inst, "_thread_dicts", [])
+    object.__setattr__(inst, "_connections", set())
+    with cls._class_lock:
+      cls._all_instances.add(inst)
+    return inst
+
+  def __init__(self):
+    super().__init__()
+    # __init__ runs once per thread when that thread first accesses this
+    # instance.
+    self._ensure_tracked_thread_dict()
+
+  def _ensure_tracked_thread_dict(self) -> None:
+    """Ensures the calling thread's local namespace dictionary is tracked."""
+    lock = object.__getattribute__(self, "_lock")
+    thread_dicts = object.__getattribute__(self, "_thread_dicts")
+    with lock:
+      if not any(d is self.__dict__ for d in thread_dicts):
+        thread_dicts.append(self.__dict__)
+
+  def __setattr__(self, name: str, value: Any) -> None:
+    super().__setattr__(name, value)
+    self._ensure_tracked_thread_dict()
+    if isinstance(value, sqlite3.Connection):
+      self.track_connection(value)
+
+  def track_connection(self, conn: sqlite3.Connection) -> None:
+    """Records a SQLite connection under tracking."""
+    lock = object.__getattribute__(self, "_lock")
+    connections = object.__getattribute__(self, "_connections")
+    with lock:
+      connections.add(conn)
+
+  @property
+  def connections(self) -> set[sqlite3.Connection]:
+    """Returns a snapshot of currently tracked SQLite connections."""
+    lock = object.__getattribute__(self, "_lock")
+    connections = object.__getattribute__(self, "_connections")
+    with lock:
+      return set(connections)
+
+  def close_all_connections(self) -> None:
+    """Closes all tracked SQLite connections and clears thread-local state."""
+    lock = object.__getattribute__(self, "_lock")
+    connections = object.__getattribute__(self, "_connections")
+    thread_dicts = object.__getattribute__(self, "_thread_dicts")
+    with lock:
+      conns = list(connections)
+      connections.clear()
+      for d in thread_dicts:
+        d.clear()
+      thread_dicts.clear()
+    for conn in conns:
+      with contextlib.suppress(Exception):
+        conn.close()
+
+  @classmethod
+  def close_all(cls) -> None:
+    """Closes connections across all tracked SQLiteConnectionLocal instances."""
+    with cls._class_lock:
+      instances = list(cls._all_instances)
+    for inst in instances:
+      inst.close_all_connections()
+
+
 # Global SQLite connections (Shared Memory or Persistent)
-_db_local = threading.local()
+_db_local = SQLiteConnectionLocal()
 _db_write_lock = threading.RLock()
 
 
@@ -964,6 +1045,7 @@ def _populate_tables() -> None:
 def _db_worker():
   """Background worker to update SQLite from IDA event queue."""
   dirty_tables: dict[str, Any] = {}
+  conn = None
   while True:
     event = _db_update_queue.get()
     try:
@@ -971,9 +1053,11 @@ def _db_worker():
       if action == "quit":
         break
 
+      if conn is None:
+        conn = _get_rw_conn()
+
       if action == "rebase_invalidation":
         with _db_write_lock:
-          conn = _get_rw_conn()
           try:
             entities = conn.execute(
                 "SELECT type, name FROM sqlite_master WHERE type IN ('table',"
@@ -991,7 +1075,6 @@ def _db_worker():
 
       if action == "rebase_completed":
         with _db_write_lock:
-          conn = _get_rw_conn()
           _set_stored_min_ea(conn, _image_min_ea)
         continue
 
@@ -1003,7 +1086,7 @@ def _db_worker():
         continue
 
       with _db_write_lock:
-        cursor = _get_rw_conn().cursor()
+        cursor = conn.cursor()
         try:
           match action:
             case "renamed":
@@ -1658,3 +1741,59 @@ def init_tables() -> bool:
 
   _db_initialized = True
   return True
+
+
+def close_tables() -> None:
+  """Shuts down the background DB worker, unhooks IDA hooks, and closes SQLite connections."""
+  global _db_initialized, _db_hooks, _db_idp_hooks, _worker_thread, _db_local
+  global _db_version_checked, _created_tables, _strings_dirty, _comments_dirty
+  global _entries_fingerprint, _image_min_ea, _is_rebasing
+
+  # 1. Unhook IDA IDB/IDP hooks
+  if _db_hooks is not None:
+    with contextlib.suppress(Exception):
+      _db_hooks.unhook()
+    _db_hooks = None
+
+  if _db_idp_hooks is not None:
+    with contextlib.suppress(Exception):
+      _db_idp_hooks.unhook()
+    _db_idp_hooks = None
+
+  # 2. Terminate background worker thread
+  if _worker_thread is not None and _worker_thread.is_alive():
+    _db_update_queue.put(("quit",))
+    _worker_thread.join(timeout=2.0)
+  _worker_thread = None
+
+  # 3. Drain any remaining queued events
+  while not _db_update_queue.empty():
+    try:
+      _db_update_queue.get_nowait()
+      _db_update_queue.task_done()
+    except (queue.Empty, ValueError):
+      break
+
+  # 4. Restore signal handlers
+  for sig, handler in list(_handlers.items()):
+    try:
+      if handler is not None:
+        signal.signal(sig, handler)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+      logging.exception("Could not restore signal handler for %s: %s", sig, e)
+  _handlers.clear()
+
+  # 5. Close all SQLite connections across all threads
+  with _db_write_lock:
+    _db_local.close_all_connections()
+  _db_local = SQLiteConnectionLocal()
+
+  # 6. Reset all module state
+  _created_tables.clear()
+  _db_initialized = False
+  _db_version_checked = False
+  _strings_dirty = False
+  _comments_dirty = False
+  _entries_fingerprint = None
+  _image_min_ea = 0
+  _is_rebasing = False
