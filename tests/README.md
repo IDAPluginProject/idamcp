@@ -52,3 +52,25 @@ internal database using the native SDK.
 
 4.  **Verify**: `test_tools.py` runs the MCP tools and asserts their correctness
     based on the golden data.
+
+## MCP Metadata Snapshot
+
+These files check what the gateway advertises to MCP clients. They do not need
+IDA.
+
+-   **dump_mcp_metadata.py**: Imports the gateway with a throwaway config and
+    writes its initialize result and its tools, resources, resource templates
+    and prompts lists (names, descriptions, input and output schemas) to JSON.
+-   **golden_mcp_metadata.json**: The committed output of
+    `dump_mcp_metadata.py`.
+-   **test_mcp_metadata.py**: Fails when the current output differs from
+    `golden_mcp_metadata.json`, and prints the added or removed entries and a
+    diff.
+
+When a change to a tool name, docstring, parameter or return type is intended,
+regenerate `gateway/proxy.py` first if needed, then the snapshot, and commit
+both:
+
+```bash
+python3 tests/dump_mcp_metadata.py
+```

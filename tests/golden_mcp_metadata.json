@@ -1,0 +1,4981 @@
+{
+  "initialize": {
+    "capabilities": {
+      "experimental": {},
+      "extensions": {
+        "io.modelcontextprotocol/ui": {}
+      },
+      "logging": {},
+      "prompts": {
+        "listChanged": true
+      },
+      "resources": {
+        "listChanged": true,
+        "subscribe": false
+      },
+      "tools": {
+        "listChanged": true
+      }
+    },
+    "protocolVersion": "<version>",
+    "serverInfo": {
+      "name": "IDA Dynamic Proxy Gateway",
+      "version": "<version>"
+    }
+  },
+  "prompts": [],
+  "resource_templates": [],
+  "resources": [
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Provides all the available IDA database info",
+      "mimeType": "application/json",
+      "name": "available_databases",
+      "uri": "ida://databases"
+    }
+  ],
+  "tools": [
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Add entry points to the list of entry points.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "reqs": {
+            "description": "List of add entry point requests",
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "makecode": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "default": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "address",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "reqs"
+        ],
+        "type": "object"
+      },
+      "name": "add_entry_points",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Replace imm-values in instructions with named Enum symbolic constants.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the instruction",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "enum_name": {
+            "description": "Name of the enum to apply",
+            "type": "string"
+          },
+          "op_index": {
+            "description": "Operand index (0-based)",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "op_index",
+          "enum_name"
+        ],
+        "type": "object"
+      },
+      "name": "apply_enums_to_operands",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Convert a number constant to an offset.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "reqs": {
+            "description": "List of convert to offset requests",
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "base": {
+                  "default": "0",
+                  "type": "string"
+                },
+                "op_index": {
+                  "default": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "address"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "reqs"
+        ],
+        "type": "object"
+      },
+      "name": "convert_to_offsets",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Creates stack variables for given functions.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function containing the variables",
+            "type": "string"
+          },
+          "creations": {
+            "description": "List of variable creations",
+            "items": {
+              "properties": {
+                "offset": {
+                  "type": "string"
+                },
+                "type_name": {
+                  "type": "string"
+                },
+                "variable_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "offset",
+                "variable_name",
+                "type_name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "creations"
+        ],
+        "type": "object"
+      },
+      "name": "create_stack_frame_variables",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Continue the debugger, returns the current instruction pointer.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_continue_process",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Delete a breakpoint at the specified address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "del a breakpoint at the specified address",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_delete_breakpoint"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Enable or disable a breakpoint at the specified address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Enable or disable a breakpoint at the specified address",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "enable": {
+            "description": "Enable or disable a breakpoint",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "enable"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_enable_breakpoint"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Exit the debugger.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_exit_process"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get all registers and their values.\n\nThis function is only available when debugging.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_get_all_registers_for_all_threads",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "registers": {
+                  "items": {
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "thread_id": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "thread_id",
+                "registers"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get registers for the current thread.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_get_all_registers_for_current_thread",
+      "outputSchema": {
+        "properties": {
+          "registers": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "thread_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "registers"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get registers and their values for a specific thread.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "thread_id": {
+            "description": "ID of the thread to get registers for",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "database_id",
+          "thread_id"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_get_all_registers_for_thread",
+      "outputSchema": {
+        "properties": {
+          "registers": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "thread_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "registers"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get the current call stack.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_get_call_stack",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get specific registers for the thread currently paused in the debugger.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "register_names": {
+            "description": "A comma-separated list of register names to retrieve",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "register_names"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_get_registers_for_current_thread",
+      "outputSchema": {
+        "properties": {
+          "registers": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "thread_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "registers"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get specific registers and their values for a given thread.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "register_names": {
+            "description": "A comma-separated list of register names to retrieve",
+            "type": "string"
+          },
+          "thread_id": {
+            "description": "ID of the thread to get specific registers for",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "database_id",
+          "thread_id",
+          "register_names"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_get_registers_for_thread",
+      "outputSchema": {
+        "properties": {
+          "registers": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "thread_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "registers"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "List all breakpoints in the program.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_list_breakpoints"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Run the debugger to the specified address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Run the debugger to the specified address",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_run_to"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Set a breakpoint at the specified address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Set a breakpoint at the specified address",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_set_breakpoint"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Start the debugger, returns the current instruction pointer.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_start_process"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Step into the current instruction.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_step_into"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Step over the current instruction.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "dbg_step_over"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Create or update a local type from a C declaration.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "c_decl": {
+            "description": "C declaration of the type. Examples include: typedef int foo_t; struct bar { int a; bool b; };",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "c_decl"
+        ],
+        "type": "object"
+      },
+      "name": "declare_type",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Decompile a function at the given address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function to decompile",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "include_line_prefix": {
+            "default": false,
+            "description": "Whether to include the line prefix (line numbers and addresses) in the decompiled output",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "decompile_function",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Delete the named stack variables for given functions.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "The hex address of the target function, e.g. '0x40000'",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "variable_names": {
+            "description": "List of variable names to delete",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "variable_names"
+        ],
+        "type": "object"
+      },
+      "name": "delete_stack_frame_variables",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Disassemble instructions starting at the given address.\n\nThis function always treats the data at the address as code (forcing\ndisassembly), making it suitable for analyzing irregular code, obfuscated\ncode, or code starting at arbitrary offsets.\n\nFor standard code analysis where you want to see IDA's full disassembly view\n(including data, directives, and formatted comments), 'get_ida_view' is\npreferred.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to disassemble code",
+            "type": "string"
+          },
+          "count": {
+            "default": 1,
+            "description": "Number of instructions to disassemble",
+            "type": "integer"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "include_bytes": {
+            "default": false,
+            "description": "Whether to include opcode bytes in the disassembly output",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "disassemble_code",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get assembly code for a function (API-compatible with older IDA builds).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function to disassemble",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "include_bytes": {
+            "default": false,
+            "description": "Whether to include opcode bytes in the disassembly output",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "disassemble_function",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Export the database to various file formats.\n\nThe tool produces the same files as from the GUI menu File -> Produce Files.\nYou can further process the generated file with other tools like\nripgrep/grep/awk, etc.\n\nReturns:\n    The path to the generated file.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "always_regenerate": {
+            "default": false,
+            "description": "Regenerate even if file exists",
+            "type": "boolean"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "file_type": {
+            "description": "Output file type: map, exe, idc, lst, asm, dif, c",
+            "enum": [
+              "map",
+              "exe",
+              "idc",
+              "lst",
+              "asm",
+              "dif",
+              "c"
+            ],
+            "type": "string"
+          },
+          "output_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional output file path"
+          }
+        },
+        "required": [
+          "database_id",
+          "file_type"
+        ],
+        "type": "object"
+      },
+      "name": "export_file",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get the basic block containing the specified address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address inside the basic block",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_basic_block",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "properties": {
+                  "end": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "predecessors": {
+                    "items": {
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  },
+                  "start": {
+                    "type": "string"
+                  },
+                  "successors": {
+                    "items": {
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "id",
+                  "start",
+                  "end",
+                  "successors",
+                  "predecessors"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Find paths between functions in the call graph.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "end_ea": {
+            "description": "Address of the destination function",
+            "type": "string"
+          },
+          "max_depth": {
+            "default": 5,
+            "description": "Maximum call depth",
+            "type": "integer"
+          },
+          "max_paths": {
+            "default": 10,
+            "description": "Maximum number of paths to return",
+            "type": "integer"
+          },
+          "start_ea": {
+            "description": "Address of the start function",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "start_ea",
+          "end_ea"
+        ],
+        "type": "object"
+      },
+      "name": "get_call_graph_between",
+      "outputSchema": {
+        "properties": {
+          "edges": {
+            "items": {
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "target"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "function_name": {
+                  "type": "string"
+                },
+                "is_external": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "address",
+                "function_name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "nodes",
+          "edges"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get the forward call graph from a function.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function to start from",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "depth": {
+            "default": 2,
+            "description": "Traversal depth",
+            "type": "integer"
+          },
+          "max_nodes": {
+            "default": 50,
+            "description": "Maximum number of nodes to return",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_call_graph_from",
+      "outputSchema": {
+        "properties": {
+          "edges": {
+            "items": {
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "target"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "function_name": {
+                  "type": "string"
+                },
+                "is_external": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "address",
+                "function_name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "nodes",
+          "edges"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get the backward call graph to a function.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function to start from",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "depth": {
+            "default": 2,
+            "description": "Traversal depth",
+            "type": "integer"
+          },
+          "max_nodes": {
+            "default": 50,
+            "description": "Maximum number of nodes to return",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_call_graph_to",
+      "outputSchema": {
+        "properties": {
+          "edges": {
+            "items": {
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "source",
+                "target"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "nodes": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "function_name": {
+                  "type": "string"
+                },
+                "is_external": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "address",
+                "function_name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "nodes",
+          "edges"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get all callees of a function.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function to get callee functions",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_callees",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "is_helper_function": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get all callers of the given address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function to get callers",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_callers",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "call_sites": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "function": {
+                  "properties": {
+                    "address": {
+                      "type": "string"
+                    },
+                    "is_helper_function": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "address",
+                    "name"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "call_sites"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Retrieves the comment associated with a specific address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to retrieve the comment from",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_comment",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get the address currently selected by the user.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_current_address",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get the function currently selected by the user.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_current_function",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "properties": {
+                  "address": {
+                    "type": "string"
+                  },
+                  "is_helper_function": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "address",
+                  "name"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Retrieve the addresses pointed to by the data at a specific location.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to get data xrefs from",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_data_xrefs_from",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get all entry points in the database.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_entry_points",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "is_helper_function": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get a function by its address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function to get",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_function_by_address",
+      "outputSchema": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "is_helper_function": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "name"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get the Control Flow Graph (CFG) of a function.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function to analyze",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_function_cfg",
+      "outputSchema": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "properties": {
+                "end": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "predecessors": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "start": {
+                  "type": "string"
+                },
+                "successors": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "id",
+                "start",
+                "end",
+                "successors",
+                "predecessors"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "function_address": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "function_address",
+          "blocks"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Check if the address belongs to a library function (FLIRT).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to check",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_function_flags",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "flag": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "flag",
+                "description"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Read global variables' values by their addresses (if known at compile-time).\n\nPrefer this function over the `read_*` functions.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "reqs": {
+            "description": "List of addresses of global variables",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "reqs"
+        ],
+        "type": "object"
+      },
+      "name": "get_global_variable_value_at_address",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "error": {
+                  "type": "string"
+                },
+                "success": {
+                  "type": "boolean"
+                },
+                "value": {}
+              },
+              "required": [
+                "success"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Read global variables' values (if known at compile-time).\n\nPrefer this function over the `read_*` functions.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "reqs": {
+            "description": "List of names of global variables",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "reqs"
+        ],
+        "type": "object"
+      },
+      "name": "get_global_variable_value_by_name",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "error": {
+                  "type": "string"
+                },
+                "success": {
+                  "type": "boolean"
+                },
+                "value": {}
+              },
+              "required": [
+                "success"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Retrieves the formatted text view directly from IDA Pro's 'IDA View-A'.\n\nCRITICAL: Use this tool (NOT disassemble_code) when inspecting data segments,\nglobal variables, arrays, or applied C-structures. It accurately renders data\ndirectives (DCB/DCD/DCQ), strings, cross-references, and applied struct\nformatting (e.g., my_struct_t <1, 2>). It is also the preferred tool for\nreading standard assembly code with inline comments.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "end_ea": {
+            "description": "End address of the view",
+            "type": "string"
+          },
+          "include_bytes": {
+            "default": false,
+            "description": "Whether to include opcode or data bytes in the view output",
+            "type": "boolean"
+          },
+          "start_ea": {
+            "description": "Start address of the view",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "start_ea",
+          "end_ea"
+        ],
+        "type": "object"
+      },
+      "name": "get_ida_view",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get metadata about the current IDB.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_metadata",
+      "outputSchema": {
+        "properties": {
+          "bitness": {
+            "type": "integer"
+          },
+          "crc32": {
+            "type": "string"
+          },
+          "database_path": {
+            "type": "string"
+          },
+          "filepath": {
+            "type": "string"
+          },
+          "filesize": {
+            "type": "string"
+          },
+          "filetype": {
+            "type": "string"
+          },
+          "imagebase": {
+            "type": "string"
+          },
+          "imagesize": {
+            "type": "string"
+          },
+          "is_headless": {
+            "type": "boolean"
+          },
+          "md5": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "procname": {
+            "type": "string"
+          },
+          "root_filename": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filepath",
+          "database_path",
+          "imagebase",
+          "imagesize",
+          "sha256",
+          "filesize",
+          "filetype",
+          "bitness",
+          "procname",
+          "is_headless"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get the operand of an instruction.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the instruction",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "op_index": {
+            "description": "Operand index (0-based)",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "op_index"
+        ],
+        "type": "object"
+      },
+      "name": "get_operand",
+      "outputSchema": {
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Retrieve the stack frame variables for a given function.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the disassembled function to retrieve the stack frame variables",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_stack_frame_variables",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "offset": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "offset",
+                "size",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get the start entry point of the binary.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_start_ea",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get structure field values at a specific address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to analyze structure at",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "struct_name": {
+            "description": "Name of the structure",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "struct_name"
+        ],
+        "type": "object"
+      },
+      "name": "get_struct_at_address",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Retrieves all cross-references originating from a specific address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to get cross-references from",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_xrefs_from",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "function": {
+                  "properties": {
+                    "address": {
+                      "type": "string"
+                    },
+                    "is_helper_function": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "address",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get all cross references to the given address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to get cross references to",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "get_xrefs_to",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "function": {
+                  "properties": {
+                    "address": {
+                      "type": "string"
+                    },
+                    "is_helper_function": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "address",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get all cross references to a named struct field (member).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "field_name": {
+            "description": "Name of the field (member) to get xrefs to",
+            "type": "string"
+          },
+          "struct_name": {
+            "description": "Name of the struct (type) containing the field",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "struct_name",
+          "field_name"
+        ],
+        "type": "object"
+      },
+      "name": "get_xrefs_to_field",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "function": {
+                  "properties": {
+                    "address": {
+                      "type": "string"
+                    },
+                    "is_helper_function": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "size": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "address",
+                    "name"
+                  ],
+                  "type": "object"
+                },
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get a formatted hexadecimal dump of memory at the specified address.\n\nEach request is limited to a maximum of 0x1000 bytes. This tool is useful for\nexamining raw memory contents, such as unknown data structures, encrypted\npayloads, or inline strings.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address (e.g., '0x400000') to start the hexdump",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "length": {
+            "description": "Length of the memory region to dump in bytes, max 0x1000 per call",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "length"
+        ],
+        "type": "object"
+      },
+      "name": "hexdump",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Close a headless IDA instance.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "idalib_headless_close"
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Open a binary in a new headless IDA instance.\n\nIf the database is already open, this tool will raise an error containing\nthe existing session ID. It is recommended to call list_available_databases\nfirst to check for active sessions, or use the existing ID returned in the\nerror if you attempt to open an already-open database.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "description": "Path to the target binary or database",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "name": "idalib_headless_open",
+      "outputSchema": {
+        "description": "Information about a connected IDA database.",
+        "properties": {
+          "bitness": {
+            "type": "integer"
+          },
+          "busy": {
+            "type": "boolean"
+          },
+          "crc32": {
+            "type": "string"
+          },
+          "database_id": {
+            "type": "string"
+          },
+          "database_path": {
+            "type": "string"
+          },
+          "filepath": {
+            "type": "string"
+          },
+          "filesize": {
+            "type": "string"
+          },
+          "filetype": {
+            "type": "string"
+          },
+          "imagebase": {
+            "type": "string"
+          },
+          "imagesize": {
+            "type": "string"
+          },
+          "is_headless": {
+            "type": "boolean"
+          },
+          "md5": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "procname": {
+            "type": "string"
+          },
+          "root_filename": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filepath",
+          "database_path",
+          "imagebase",
+          "imagesize",
+          "sha256",
+          "filesize",
+          "filetype",
+          "bitness",
+          "procname",
+          "is_headless",
+          "database_id",
+          "pid"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Execute Python code in IDA context.\n\nReturns dict with result/stdout/stderr. Has access to all IDA API modules.\nSupports Jupyter-style evaluation (returns the value of the last expression).\nMaintains persistent state across calls.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Python code to execute",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "code"
+        ],
+        "type": "object"
+      },
+      "name": "idapython_eval",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Navigates the IDA UI (IDA View/Pseudocode) to the specified address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "The target address to jump to",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "jump_to_address",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "List all available IDA database connection IDs.\n\nActive databases returned by this tool do not need to be opened again; they\nare ready to accept queries using their database_id.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "list_available_databases",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "description": "Information about a connected IDA database.",
+              "properties": {
+                "bitness": {
+                  "type": "integer"
+                },
+                "busy": {
+                  "type": "boolean"
+                },
+                "crc32": {
+                  "type": "string"
+                },
+                "database_id": {
+                  "type": "string"
+                },
+                "database_path": {
+                  "type": "string"
+                },
+                "filepath": {
+                  "type": "string"
+                },
+                "filesize": {
+                  "type": "string"
+                },
+                "filetype": {
+                  "type": "string"
+                },
+                "imagebase": {
+                  "type": "string"
+                },
+                "imagesize": {
+                  "type": "string"
+                },
+                "is_headless": {
+                  "type": "boolean"
+                },
+                "md5": {
+                  "type": "string"
+                },
+                "module": {
+                  "type": "string"
+                },
+                "pid": {
+                  "type": "integer"
+                },
+                "procname": {
+                  "type": "string"
+                },
+                "root_filename": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "filepath",
+                "database_path",
+                "imagebase",
+                "imagesize",
+                "sha256",
+                "filesize",
+                "filetype",
+                "bitness",
+                "procname",
+                "is_headless",
+                "database_id",
+                "pid"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "List all bookmarks in the database.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_bookmarks",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "index": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "index",
+                "address",
+                "description"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Lists all defined enums (enumerated types) in the IDA database.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "include_members": {
+            "default": true,
+            "description": "Whether to include the list of members for each enum (default: True).",
+            "type": "boolean"
+          },
+          "name_pattern": {
+            "default": "",
+            "description": "Optional case-insensitive regular expression pattern to match enum names (default: \"\", matches all).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_enums",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "member_count": {
+                  "type": "integer"
+                },
+                "members": {
+                  "items": {
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "value"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "size": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "member_count"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "List matching functions in the database (paginated, filtered).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "default": 0,
+            "description": "Number of functions to list (100 is a good default, 0 means remainder)",
+            "type": "integer"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Offset to start listing from (start at 0)",
+            "type": "integer"
+          },
+          "regex_filter": {
+            "default": "",
+            "description": "Regular expression filter",
+            "type": "string"
+          },
+          "regex_flags": {
+            "default": "IGNORECASE",
+            "description": "A comma-separated list of flag strings, a flag can be 'IGNORECASE', 'MULTILINE', 'DOTALL'. Default flag is 'IGNORECASE'.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_functions",
+      "outputSchema": {
+        "properties": {
+          "data": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "is_helper_function": {
+                  "type": "boolean"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_offset": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "List matching global variables in the database (paginated, filtered).\n\nNote: This list excludes dummy names (e.g., off_, loc_, byte_, sub_) to focus\non user-defined or imported symbols.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "default": 0,
+            "description": "Number of globals to list (100 is a good default, 0 means remainder)",
+            "type": "integer"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Offset to start listing from (start at 0)",
+            "type": "integer"
+          },
+          "regex_filter": {
+            "default": "",
+            "description": "A regular expression used to filter the list (matching is always case-insensitive). This parameter is required; pass an empty stringto bypass filtering.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_globals",
+      "outputSchema": {
+        "properties": {
+          "data": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_offset": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "List all imported symbols with their name and module (paginated).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "default": 0,
+            "description": "Number of imports to list (100 is a good default, 0 means remainder)",
+            "type": "integer"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Offset to start listing from (start at 0)",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_imports",
+      "outputSchema": {
+        "properties": {
+          "data": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "imported_name": {
+                  "type": "string"
+                },
+                "module": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "imported_name",
+                "module"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_offset": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "List Local types in the database.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "name_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "A regular expression used to filter the list (matching is always case-insensitive). Return all types if this parameter is None or an empty string."
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_local_types",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "List all patched bytes in the database.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_patched_bytes",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "fpos": {
+                  "type": "integer"
+                },
+                "original_value": {
+                  "type": "integer"
+                },
+                "patched_value": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "address",
+                "fpos",
+                "original_value",
+                "patched_value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "List all segments in the binary.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_segments",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "end": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "permissions": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "start",
+                "end",
+                "size",
+                "permissions"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "List matching strings in the database (paginated, filtered).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "default": 0,
+            "description": "Number of strings to list (100 is a good default, 0 means remainder)",
+            "type": "integer"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "offset": {
+            "default": 0,
+            "description": "Offset to start listing from (start at 0)",
+            "type": "integer"
+          },
+          "regex_filter": {
+            "default": "",
+            "description": "Regular expresssion filter",
+            "type": "string"
+          },
+          "regex_flags": {
+            "default": "IGNORECASE",
+            "description": "A comma-separated list of flag strings, a flag can be 'IGNORECASE', 'MULTILINE', 'DOTALL'. Default flag is 'IGNORECASE'.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_strings",
+      "outputSchema": {
+        "properties": {
+          "data": {
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "length": {
+                  "type": "integer"
+                },
+                "string": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "length",
+                "string"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_offset": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Get structures with detailed member information.\n\nOptionally filter by name pattern.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "name_pattern": {
+            "default": "",
+            "description": "Optional case-insensitive regular expression pattern to match structure names (default: \"\", matches all).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_structs",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "is_udt": {
+                  "type": "boolean"
+                },
+                "member_count": {
+                  "type": "integer"
+                },
+                "members": {
+                  "items": {
+                    "properties": {
+                      "index": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "offset": {
+                        "type": "integer"
+                      },
+                      "size": {
+                        "type": "integer"
+                      },
+                      "type": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "index",
+                      "name",
+                      "offset",
+                      "size",
+                      "type"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "ordinal": {
+                  "type": "integer"
+                },
+                "size": {
+                  "type": "integer"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "udt_type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "size",
+                "is_udt",
+                "ordinal",
+                "member_count",
+                "udt_type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Create an array of items starting at the specified address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to create array at",
+            "type": "string"
+          },
+          "count": {
+            "description": "Number of items in the array",
+            "type": "integer"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "count"
+        ],
+        "type": "object"
+      },
+      "name": "make_arrays",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Convert raw bytes to instructions at an address (GUI: 'C').\n\nThis operation automatically undefines (GUI: 'U') any existing item at the\nspecified address to allow for the creation of a new instruction.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to convert to instructions",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "make_code",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Convert the current item to a primitive data type (byte, word, etc.).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "reqs": {
+            "description": "List of make data requests",
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "data_type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "data_type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "reqs"
+        ],
+        "type": "object"
+      },
+      "name": "make_data_batch",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Define a function at a code location (GUI: 'P').\n\nTo ensure success, this operation first undefines (GUI: 'U') any existing\nitem at the address and converts it to code before establishing the function\ndefinition.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to define function",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "make_function",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Create a string literal at the specified address.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "end_ea": {
+            "default": "",
+            "description": "Ending address of the string (exclusive). If empty (default), length will be calculated automatically.",
+            "type": "string"
+          },
+          "start_ea": {
+            "description": "Address to create string at",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "start_ea"
+        ],
+        "type": "object"
+      },
+      "name": "make_strings",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Convert the current item to a structure instance.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to create structure instance at",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "size": {
+            "default": -1,
+            "description": "Structure size in bytes. Use -1 for automatic calculation (default).",
+            "type": "integer"
+          },
+          "struct_name": {
+            "description": "Name of the structure type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "struct_name"
+        ],
+        "type": "object"
+      },
+      "name": "make_structs",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Patch multiple assembly instructions at given addresses.\n\nYou can provide multiple assembly instructions separated by ';'.\nThe assembler is aware of the IDA Pro database context, which means you can\ndirectly use label names, function names, and global variable names\nin your assembly instructions (e.g., 'call my_function' or 'mov eax, my_var').\n\nThe architecture and bitness (e.g., x86, ARM Thumb, MIPS) are automatically\ninferred from the current IDA database.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "reqs": {
+            "description": "List of patch addresses assembles requests",
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "instructions": {
+                  "type": "string"
+                },
+                "syntax": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "intel",
+                        "nasm",
+                        "att"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                }
+              },
+              "required": [
+                "address",
+                "instructions"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "reqs"
+        ],
+        "type": "object"
+      },
+      "name": "patch_assembly",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Patch bytes directly in memory.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "reqs": {
+            "description": "List of patch bytes requests",
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "hex_string": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "hex_string"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "reqs"
+        ],
+        "type": "object"
+      },
+      "name": "patch_bytes",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Read formatted data from memory at given addresses.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "reqs": {
+            "description": "List of read data requests",
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "data_type": {
+                  "enum": [
+                    "byte",
+                    "word",
+                    "dword",
+                    "qword",
+                    "string",
+                    "bytes"
+                  ],
+                  "type": "string"
+                },
+                "size": {
+                  "default": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "address",
+                "data_type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "reqs"
+        ],
+        "type": "object"
+      },
+      "name": "read_data",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "items": {
+              "properties": {
+                "error": {
+                  "type": "string"
+                },
+                "success": {
+                  "type": "boolean"
+                },
+                "value": {}
+              },
+              "required": [
+                "success"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Set or delete name of items at the specified addresses.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "reqs": {
+            "description": "List of requests of address renaming",
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "new_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "new_name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "reqs"
+        ],
+        "type": "object"
+      },
+      "name": "rename_addresses",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Rename local variables in a function.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function containing the variables",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "renames": {
+            "description": "List of variable renames to apply",
+            "items": {
+              "properties": {
+                "new_name": {
+                  "type": "string"
+                },
+                "old_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "old_name",
+                "new_name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "renames"
+        ],
+        "type": "object"
+      },
+      "name": "rename_local_variables",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Change the name of stack variables for IDA functions.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function containing the variables",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "renames": {
+            "description": "List of variable renames",
+            "items": {
+              "properties": {
+                "new_name": {
+                  "type": "string"
+                },
+                "old_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "old_name",
+                "new_name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "renames"
+        ],
+        "type": "object"
+      },
+      "name": "rename_stack_frame_variables",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Search for binary pattern within a specified memory range.\n\nThe search operates within the bounds defined by `start_ea` (low address) and\n`end_ea` (high address).\n- When the direction is 'down', the search progresses from `start_ea`\nascending towards `end_ea`.\n- When the direction is 'up', the search progresses from `end_ea` descending\ntowards `start_ea`.\n\nNote: Results are capped at a maximum of 50 matches per call.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "direction": {
+            "default": "down",
+            "description": "Direction: 'up' or 'down'. Defaults to 'down' if omitted.",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "type": "string"
+          },
+          "end_ea": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "High address bound for the search range. Defaults to the maximum address of the binary if omitted."
+          },
+          "pattern": {
+            "description": "Hex pattern to search for (e.g. '55 8B EC' or '55 8B ??')",
+            "type": "string"
+          },
+          "start_ea": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Low address bound for the search range. Defaults to the minimum address of the binary if omitted."
+          }
+        },
+        "required": [
+          "database_id",
+          "pattern"
+        ],
+        "type": "object"
+      },
+      "name": "search_binary",
+      "outputSchema": {
+        "properties": {
+          "addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "remaining_range": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "addresses"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Search for a text string within a specified memory range.\n\nThe search operates within the bounds defined by `start_ea` (low address) and\n`end_ea` (high address).\n- When the direction is 'down', the search progresses from `start_ea`\nascending towards `end_ea`.\n- When the direction is 'up', the search progresses from `end_ea` descending\ntowards `start_ea`.\n\nNote: The results are capped at a maximum of 50 matches per call.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "case_sensitive": {
+            "default": false,
+            "description": "Whether the search is case-sensitive (default: False).",
+            "type": "boolean"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "direction": {
+            "default": "down",
+            "description": "Direction: 'up' or 'down'. Defaults to 'down' if omitted.",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "type": "string"
+          },
+          "end_ea": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "High address bound for the search range. Defaults to the maximum address of the binary if omitted."
+          },
+          "start_ea": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Low address bound for the search range. Defaults to the minimum address of the binary if omitted."
+          },
+          "text": {
+            "description": "Text to search for",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "search_text",
+      "outputSchema": {
+        "properties": {
+          "addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "remaining_range": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "addresses"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Sets the background color of items at specified addresses.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "reqs": {
+            "description": "List of color setting requests",
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "color": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "item_type": {
+                  "default": "CIC_ITEM",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "color"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "reqs"
+        ],
+        "type": "object"
+      },
+      "name": "set_colors",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Sets a comment at the specified address in both disassembly and pseudocode.\n\nThis function sets a comment in the disassembly view. If the address is\nwithin a function that can be decompiled, it also attempts to set the comment\nin the pseudocode view:\n- As a function comment if the address is the entry point.\n- At the nearest mapped location in the pseudocode tree otherwise.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to set the comment for",
+            "type": "string"
+          },
+          "comment": {
+            "description": "Comment text",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "comment"
+        ],
+        "type": "object"
+      },
+      "name": "set_comment",
+      "outputSchema": {
+        "properties": {
+          "disassembly_comment_error": {
+            "type": "string"
+          },
+          "disassembly_comment_status": {
+            "enum": [
+              "success",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "pseudocode_comment_error": {
+            "type": "string"
+          },
+          "pseudocode_comment_status": {
+            "enum": [
+              "success",
+              "failed",
+              "not_applicable"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "disassembly_comment_status",
+          "pseudocode_comment_status"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Set or unset the non-returning flag for functions.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "is_noret": {
+            "description": "True to mark as non-returning, False otherwise",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "is_noret"
+        ],
+        "type": "object"
+      },
+      "name": "set_functions_noret",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Set local variables' types.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address of the function containing the variables",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "type_changes": {
+            "description": "List of variable type changes to apply",
+            "items": {
+              "properties": {
+                "new_type": {
+                  "type": "string"
+                },
+                "variable_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "variable_name",
+                "new_type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "type_changes"
+        ],
+        "type": "object"
+      },
+      "name": "set_local_variable_types",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Updates the types for the variables within a function's stack frame.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "The hex address of the target function, e.g. '0x40000'",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "type_changes": {
+            "description": "List of variable type changes",
+            "items": {
+              "properties": {
+                "type_name": {
+                  "type": "string"
+                },
+                "variable_name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "variable_name",
+                "type_name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "address",
+          "type_changes"
+        ],
+        "type": "object"
+      },
+      "name": "set_stack_frame_variable_types",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Set type of functions/variables.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "reqs": {
+            "description": "List of set type requests",
+            "items": {
+              "properties": {
+                "address": {
+                  "type": "string"
+                },
+                "new_type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address",
+                "new_type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "database_id",
+          "reqs"
+        ],
+        "type": "object"
+      },
+      "name": "set_types",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Executes read-only SQL queries against IDA Pro using SQLite.\n\nTables ('functions', 'strings', 'names', 'imports', 'segments', 'local_types',\n'xrefs', 'entries') are automatically populated from IDA on first use and\nkept in sync automatically via event hooks.\n\n### Available Tables & Schemas\n- functions (start_ea INTEGER, end_ea INTEGER, name TEXT, demangled_name\n  TEXT, prototype TEXT, size INTEGER, is_lib INTEGER)\n- strings (address INTEGER, length INTEGER, string TEXT)\n- names (address INTEGER, name TEXT)\n- imports (address INTEGER, name TEXT, module TEXT)\n- segments (name TEXT, class TEXT, start_ea INTEGER, end_ea INTEGER,\nsize INTEGER, permissions TEXT)\n- local_types (ordinal INTEGER, name TEXT, declaration TEXT)\n- xrefs (from_ea INTEGER, to_ea INTEGER, type TEXT, from_function_ea INTEGER)\n- entries (index_id INTEGER, ordinal INTEGER, address INTEGER, name TEXT)\n\nIt supports standard SQL SELECT statements. You can provide multiple\nqueries in a list or separated by ';'.\n\n### Extended SQLite Support\nThis tool provides an enhanced SQLite interface for reverse engineering:\n- **Hexadecimal Literals:** You can use `0x` prefixed hexadecimal numbers\n  directly in your queries for any integer types (e.g., `WHERE address >\n  0x401000`, `WHERE size = 0x40`).\n- **Automatic Hex Formatting in Final Output:** All integer columns and values\n  in the final query results (the returned dictionaries) are automatically\n  formatted as lowercase `0x...` hexadecimal strings (e.g., `0x401240`,\n  `0x20`), eliminating the need to manually call `printf('0x%X', ...)` for\n  selected output columns.\n- **Intermediate Evaluation in SQLite:** Inside the SQL engine, expressions\n  and columns remain numeric integer values. If coerced to text within a\n  query (e.g. via `LIKE`, `CAST(... AS TEXT)`, or string concatenation\n  `||`), SQLite uses standard base-10 decimal representation. To perform\n  hex pattern matching inside the query itself, explicitly use\n  `printf('0x%x', address) LIKE '0x401%'` or prefer numeric comparisons\n  (`WHERE address BETWEEN 0x401000 AND 0x402000`).\n- **Large Address Support:** All address columns are automatically treated\n  as unsigned 64-bit integers (`uint64`).\n\n### Notes on Querying\n- To see available tables or their schemas dynamically:\n  - `SELECT name FROM sqlite_master WHERE type='table'`\n  - `PRAGMA table_info('functions')`\n- **'xrefs' table:** Contains code and data cross-references between memory\n  addresses (excluding ordinary sequential instruction flow and type IDs).\n  Reference types include `call`, `jmp`, `read`, `write`, and 'offset'. The\n  `from_function_ea` column contains the start address of the\n  function containing `from_ea` (or NULL if outside any function).\n  Supports all comparison and set operators (`=`, `!=`, `<`, `<=`, `>`, `>=`,\n  `BETWEEN ... AND ...`, `IN (...)`) on `from_ea` and `to_ea`.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "sql": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "SQL query or queries to execute. Supports multiple queries (in a list or separated by ';')."
+          }
+        },
+        "required": [
+          "database_id",
+          "sql"
+        ],
+        "type": "object"
+      },
+      "name": "sql_query",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "items": {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "items": {
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "items": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            ]
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "_meta": {
+        "fastmcp": {
+          "tags": []
+        }
+      },
+      "description": "Clear code/data definitions in a range (GUI: 'U').",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Address to undefine",
+            "type": "string"
+          },
+          "database_id": {
+            "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
+            "type": "string"
+          },
+          "size": {
+            "default": 1,
+            "description": "Number of bytes to undefine",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "database_id",
+          "address"
+        ],
+        "type": "object"
+      },
+      "name": "undefine",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
+      }
+    }
+  ]
+}
