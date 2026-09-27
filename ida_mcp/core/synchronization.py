@@ -42,6 +42,42 @@ class IDASyncError(Exception):
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
+# Set to False after the first failed or impossible flush, so the problem is
+# logged once instead of on every write.
+_flush_available = True
+
+
+def _flush_after_write() -> None:
+  """Flushes IDA's database buffers to disk if `flush_after_write` is set.
+
+  Runs on IDA's main thread after a top-level @idawrite call. The API is probed
+  lazily; a missing API or an error is logged once and then ignored, so a flush
+  problem never fails the tool call.
+  """
+  global _flush_available
+  if not _flush_available:
+    return
+  try:
+    # pylint: disable=g-import-not-at-top
+    from shared.config import load_config
+
+    if not load_config().get("flush_after_write"):
+      return
+    import ida_loader
+
+    flush_buffers = getattr(ida_loader, "flush_buffers", None)
+    if flush_buffers is None:
+      _flush_available = False
+      logger.error(
+          "flush_after_write is set but ida_loader.flush_buffers is not"
+          " available in this IDA version; not flushing."
+      )
+      return
+    flush_buffers()
+  except Exception as e:  # pylint: disable=broad-exception-caught
+    _flush_available = False
+    logger.error("flush_after_write: flush_buffers failed, disabling: %r", e)
+
 
 class IDASafety(enum.IntEnum):
   SAFE_NONE = ida_kernwin.MFF_FAST
@@ -88,6 +124,8 @@ class _IDACall:
       self.success = False
       self.result = e
     finally:
+      if self.safety_mode == IDASafety.SAFE_WRITE:
+        _flush_after_write()
       idc.batch(old_batch)
 
   def run_in_main(self) -> Any:
