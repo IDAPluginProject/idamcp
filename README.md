@@ -383,6 +383,9 @@ python3 -m generators.generate_proxy
 # Format the file with [pyink](https://github.com/google/pyink)
 pyink --line-length=80 --pyink-indentation=2 gateway/proxy.py
 
+# Regenerate the MCP metadata snapshot checked by tests/test_mcp_metadata.py
+python3 tests/dump_mcp_metadata.py
+
 # Run the test suite
 make test
 ```
