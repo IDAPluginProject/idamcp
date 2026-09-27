@@ -91,6 +91,14 @@ def _clear(thread_id: int) -> None:
     func(thread_id, None)
 
 
+_current = threading.local()
+
+
+def current() -> "InterruptibleCall | None":
+  """Returns the InterruptibleCall of the tool running on this thread, if any."""
+  return getattr(_current, "call", None)
+
+
 class InterruptibleCall:
   """Tracks one tool execution so it can be interrupted from another thread.
 
@@ -112,6 +120,7 @@ class InterruptibleCall:
     self._lock = threading.Lock()
     self._thread_id: int | None = None
     self._fired = False
+    self._previous: "InterruptibleCall | None" = None
 
   @property
   def fired(self) -> bool:
@@ -120,6 +129,8 @@ class InterruptibleCall:
   def enter(self) -> None:
     with self._lock:
       self._thread_id = threading.get_ident()
+    self._previous = current()
+    _current.call = self
 
   def request(self) -> None:
     with self._lock:
@@ -134,6 +145,7 @@ class InterruptibleCall:
       thread_id, self._thread_id = self._thread_id, None
       if self._fired and thread_id is not None:
         _clear(thread_id)
+    _current.call, self._previous = self._previous, None
 
 
 def protect_handlers(module: ast.Module) -> ast.Module:

@@ -50,6 +50,7 @@ _DEFAULT_CONFIG = {
     "proxy_port": 8000,
     "flush_after_write": False,
     "async_interrupt": True,
+    "eval_timeout": None,
 }
 
 
@@ -171,6 +172,11 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
   _set_option_from_env(config, "check_entries_freshness")
   _set_option_from_env(config, "flush_after_write")
   _set_option_from_env(config, "async_interrupt")
+  if env_timeout := os.environ.get("EVAL_TIMEOUT", "").strip():
+    try:
+      config["eval_timeout"] = float(env_timeout)
+    except ValueError:
+      logging.warning("Ignoring invalid EVAL_TIMEOUT=%r", env_timeout)
 
   if not 0 <= config["proxy_port"] <= 65535:
     logging.warning(

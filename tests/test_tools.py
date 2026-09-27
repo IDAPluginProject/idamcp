@@ -391,6 +391,7 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
         self.verify_lock_reentrancy_no_deadlock,
         self.verify_sql_query_cancellation_and_recovery,
         self.verify_eval_cancellation_tight_loop,
+        self.verify_eval_timeout,
     ]
 
     errors = []
@@ -3851,6 +3852,27 @@ with q._db_write_lock:
     except asyncio.TimeoutError:
       self.fail("IDA thread still busy: tight loop was not interrupted")
     print(f"IDA thread free again after {time.time() - start_time:.2f}s")
+    self.assertIn("sha256", meta)
+
+  async def verify_eval_timeout(self):
+    """idapython_eval(timeout=...) interrupts a runaway loop and returns."""
+    code = "print('started')\nx = 0\nwhile True:\n  x += 1\n"
+    start_time = time.time()
+    res = await asyncio.wait_for(
+        self.run_tool("idapython_eval", code=code, timeout=1.0), timeout=30.0
+    )
+    elapsed = time.time() - start_time
+    print(f"eval timed out after {elapsed:.2f}s: {res}")
+    self.assertTrue(res.get("timed_out"))
+    self.assertEqual(res["stdout"], "started\n")
+    self.assertIn("TimeoutError", res["stderr"])
+    self.assertLess(elapsed, 10.0)
+
+    # Fast code with a timeout is unaffected, and the IDA thread is free.
+    res = await self.run_tool("idapython_eval", code="1 + 1", timeout=5.0)
+    self.assertEqual(res["result"], "2")
+    self.assertNotIn("timed_out", res)
+    meta = await self.run_tool("get_metadata")
     self.assertIn("sha256", meta)
 
 
