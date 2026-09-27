@@ -40,6 +40,7 @@ from fastmcp.exceptions import ToolError
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
+from shared import load_options
 from shared.config import load_config
 from shared.rpc import RPCClient
 from shared.rpc import RPCError
@@ -232,11 +233,21 @@ class HeadlessManager:
     self.spawned_instances.discard(database_id)
     await disconnect_backend(database_id)
 
-  async def spawn(self, path: str) -> DatabaseInfo:
-    """Spawn a headless instance."""
+  async def spawn(
+      self,
+      path: str,
+      options: load_options.LoadOptions | None = None,
+  ) -> DatabaseInfo:
+    """Spawn a headless instance, optionally with validated load options."""
     path = os.path.abspath(path)
     if not os.path.exists(path):
       raise ToolError(f"{path} doesn't exist.")
+    if options is None:
+      options = load_options.LoadOptions()
+    try:
+      load_options.check_applicable(path, options)
+    except load_options.LoadOptionsError as e:
+      raise ToolError(str(e)) from e
 
     for db_id, metadata in list(_global_metadata.items()):
       if (
@@ -284,6 +295,7 @@ class HeadlessManager:
           "-m",
           "ida_mcp.headless",
           path,
+          *options.to_cli(),
           stdin=asyncio.subprocess.DEVNULL,
           stdout=asyncio.subprocess.PIPE,
           stderr=asyncio.subprocess.PIPE,
@@ -842,6 +854,21 @@ async def available_databases() -> str:
 @mcp_tool
 async def idalib_headless_open(
     path: Annotated[str, "Path to the target binary or database"],
+    processor: Annotated[
+        str | None,
+        "Optional IDA processor module (IDA's -p), e.g. 'metapc', 'arm',"
+        " 'arm:ARMv7-M', 'mipsb'. Only for new binaries; needs IDA 9.1+",
+    ] = None,
+    loader: Annotated[
+        str | None,
+        "Optional file type name or prefix as IDA lists it (IDA's -T), e.g."
+        " 'Binary file'. Only for new binaries; needs IDA 9.1+",
+    ] = None,
+    base_address: Annotated[
+        str | None,
+        "Optional 16-byte aligned load address (IDA's -b), e.g. '0x10000'."
+        " Only for new binaries; needs IDA 9.1+",
+    ] = None,
 ) -> DatabaseInfo:
   """Open a binary in a new headless IDA instance.
 
@@ -849,8 +876,15 @@ async def idalib_headless_open(
   the existing session ID. It is recommended to call list_available_databases
   first to check for active sessions, or use the existing ID returned in the
   error if you attempt to open an already-open database.
+
+  processor/loader/base_address are for raw firmware or other files IDA can't
+  identify on its own; leave them unset to let IDA pick.
   """
-  return await _headless_manager.spawn(path)
+  try:
+    options = load_options.parse_load_options(processor, loader, base_address)
+  except load_options.LoadOptionsError as e:
+    raise ToolError(str(e)) from e
+  return await _headless_manager.spawn(path, options)
 
 
 @mcp_tool

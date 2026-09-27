@@ -23,6 +23,7 @@
 import argparse
 import contextlib
 import hashlib
+import inspect
 import logging
 import pathlib
 import signal
@@ -40,6 +41,7 @@ import idaapi
 from ida_mcp.core import ida_thread
 from ida_mcp.server import mcp_server_thread
 from ida_mcp.server import stop_server
+from shared import load_options
 # fmt: on
 
 
@@ -61,6 +63,11 @@ def main():
   parser.add_argument(
       "input_path", type=pathlib.Path, help="Path to the binary file to analyze"
   )
+  parser.add_argument("--processor", help="IDA processor module (-p)")
+  parser.add_argument("--loader", help="IDA file type name or prefix (-T)")
+  parser.add_argument(
+      "--base-address", help="Load address, 16-byte aligned (-b)"
+  )
   args = parser.parse_args()
 
   # Configure logging
@@ -70,12 +77,46 @@ def main():
     logger.error("Input file not found: %s", args.input_path)
     sys.exit(1)
 
-  logger.info("Initializing idalib and opening %s...", args.input_path)
+  try:
+    options = load_options.parse_load_options(
+        args.processor, args.loader, args.base_address
+    )
+    load_options.check_applicable(str(args.input_path), options)
+  except load_options.LoadOptionsError as e:
+    logger.error("%s", e)
+    sys.exit(1)
+
+  open_kwargs = {}
+  if not options.is_empty():
+    # idapro.open_database() only accepts `args` from IDA 9.1 on.
+    try:
+      has_args = "args" in inspect.signature(idapro.open_database).parameters
+    except (TypeError, ValueError):
+      has_args = False
+    if not has_args:
+      logger.error(
+          "Load options (processor/loader/base_address) need IDA 9.1 or"
+          " newer: this idalib's open_database() has no 'args' parameter."
+      )
+      sys.exit(1)
+    open_kwargs["args"] = options.to_ida_args()
+
+  logger.info(
+      "Initializing idalib and opening %s %s...",
+      args.input_path,
+      open_kwargs.get("args", ""),
+  )
 
   try:
-    ret = idapro.open_database(str(args.input_path), run_auto_analysis=True)
+    ret = idapro.open_database(
+        str(args.input_path), run_auto_analysis=True, **open_kwargs
+    )
     if ret != 0:
-      logger.error("Failed to open database, error code: %#x", ret)
+      logger.error(
+          "Failed to open database, error code: %#x%s",
+          ret,
+          f" (load options: {open_kwargs['args']})" if open_kwargs else "",
+      )
       sys.exit(1)
   except Exception as e:  # pylint: disable=broad-exception-caught
     logger.exception("Failed to open database, exception: %s", e)

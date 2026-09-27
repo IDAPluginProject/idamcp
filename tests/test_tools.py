@@ -375,6 +375,7 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
         self.verify_types_and_patching_lifecycle,
         self.verify_memory_and_search_lifecycle,
         self.verify_misc_write_lifecycle,
+        self.verify_headless_load_options,
         self.verify_invalid_addresses_corner_cases,
         self.verify_malformed_inputs_corner_cases,
         self.verify_type_declaration_error_cases,
@@ -1904,6 +1905,72 @@ hex(tid) if tid is not None else ""
 
     curr_func = await self.run_tool("get_current_function")
     self.assertTrue(isinstance(curr_func, dict) or isinstance(curr_func, str))
+
+  async def verify_headless_load_options(self):
+    """Opens a copy of the test binary as a raw binary at 0x10000."""
+    import shutil  # pylint: disable=g-import-not-at-top
+
+    tmp_dir = tempfile.mkdtemp(prefix="lo.")
+    fw = os.path.join(tmp_dir, "fw.bin")
+    shutil.copy(os.path.abspath("tests/test_binary"), fw)
+    opened_id = None
+    pid = None
+    try:
+      resp = await self.session.call_tool(
+          "idalib_headless_open",
+          {
+              "path": fw,
+              "processor": "metapc",
+              "loader": "Binary file",
+              "base_address": "0x10000",
+          },
+      )
+      self.assertFalse(_is_error(resp), resp)
+      sc = _structured_content(resp)
+      opened_id, pid = sc["database_id"], sc.get("pid")
+
+      resp = await self.session.call_tool(
+          "idapython_eval",
+          {
+              "database_id": opened_id,
+              "code": (
+                  "(hex(ida_ida.inf_get_min_ea()), idaapi.get_file_type_name(),"
+                  " ida_ida.inf_get_procname())"
+              ),
+          },
+      )
+      self.assertFalse(_is_error(resp), resp)
+      res = json.loads(resp.content[0].text)
+      self.assertEqual(
+          res["result"], "('0x10000', 'Binary file', 'metapc')", res
+      )
+
+      # IDA rejects an unknown processor module: open_database returns 4 and
+      # the backend's error (with the IDA args) reaches the caller.
+      fw2 = os.path.join(tmp_dir, "fw2.bin")
+      shutil.copy(fw, fw2)
+      resp = await self.session.call_tool(
+          "idalib_headless_open", {"path": fw2, "processor": "nosuchcpu"}
+      )
+      self.assertTrue(_is_error(resp))
+      self.assertIn("load options: -pnosuchcpu", resp.content[0].text)
+
+      # Values that could inject another switch are rejected before spawn.
+      resp = await self.session.call_tool(
+          "idalib_headless_open", {"path": fw, "processor": "-Sevil.py"}
+      )
+      self.assertTrue(_is_error(resp))
+      self.assertIn("Invalid processor", resp.content[0].text)
+    finally:
+      if opened_id:
+        await self.session.call_tool(
+            "idalib_headless_close", {"database_id": opened_id}
+        )
+        for _ in range(100):
+          if not pid or not _is_process_running(pid):
+            break
+          await asyncio.sleep(0.1)
+      shutil.rmtree(tmp_dir, ignore_errors=True)
 
   async def verify_misc_write_lifecycle(self):
     # Dynamically resolve rebased addresses to handle ASLR rebasing
