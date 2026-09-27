@@ -633,6 +633,38 @@ class RegistryEventHandler(FileSystemEventHandler):
       )
 
 
+def _mcp_session_id() -> str | None:
+  """Returns the MCP session id of the running tool call, or None."""
+  try:
+    # pylint: disable=g-import-not-at-top
+    from fastmcp.server.dependencies import get_context
+
+    session_id = get_context().session_id
+  except Exception:  # pylint: disable=broad-exception-caught
+    return None
+  return session_id if isinstance(session_id, str) else None
+
+
+def _request_meta(target: str) -> dict[str, Any] | None:
+  """Returns the RPC request metadata for a call to the backend, if any.
+
+  Only backends that advertise "eval_namespaces" get the MCP session id; older
+  backends receive the same requests as before.
+
+  Args:
+    target: The ID of the backend.
+
+  Returns:
+    The metadata, or None when there is nothing to send.
+  """
+  if "eval_namespaces" not in backend_capabilities(target):
+    return None
+  session_id = _mcp_session_id()
+  if session_id is None:
+    return None
+  return {"session": session_id}
+
+
 async def forward_to(target: str, tool_name: str, args: dict[str, Any]) -> Any:
   """Forwards a tool call to the running backend server."""
   logging.info(
@@ -666,7 +698,12 @@ async def forward_to(target: str, tool_name: str, args: dict[str, Any]) -> Any:
       logging.info(
           "[Gateway] Sending RPC call to backend %s: %s", target, tool_name
       )
-      result = await client.call(method=tool_name, params=call_arguments)
+      if meta := _request_meta(target):
+        result = await client.call(
+            method=tool_name, params=call_arguments, meta=meta
+        )
+      else:
+        result = await client.call(method=tool_name, params=call_arguments)
       logging.info(
           "[Gateway] RPC call to backend %s: %s succeeded", target, tool_name
       )

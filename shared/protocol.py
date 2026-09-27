@@ -44,7 +44,9 @@ PROTOCOL_VERSION = 1
 MIN_BACKEND_PROTOCOL_VERSION = 1
 
 # Optional features of this backend, advertised in its registry record.
-BACKEND_CAPABILITIES: tuple[str, ...] = ()
+# eval_namespaces: accepts the gateway's MCP session id in the request "meta"
+#   object and can keep a separate idapython_eval namespace per session.
+BACKEND_CAPABILITIES: tuple[str, ...] = ("eval_namespaces",)
 
 
 def record_fields() -> dict[str, Any]:
