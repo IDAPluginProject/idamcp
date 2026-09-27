@@ -40,6 +40,7 @@ from fastmcp.exceptions import ToolError
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
+from shared import liveness
 from shared import load_options
 from shared import protocol
 from shared.config import load_config
@@ -82,6 +83,19 @@ def _is_process_running(pid: int) -> bool:
       return True
     except OSError:
       return False
+
+
+def _record_alive(record: Mapping[str, Any]) -> bool:
+  """Whether a registry record's backend is alive (lock file, else PID)."""
+  return liveness.record_alive(record, _is_process_running)
+
+
+def _backend_alive(database_id: str, pid: int | None = None) -> bool:
+  """Whether a connected backend is alive, using its registry record."""
+  record = _global_records.get(database_id)
+  if record is not None:
+    return _record_alive(record)
+  return bool(pid) and _is_process_running(pid)
 
 
 def _cleanup_stale_registry_file(
@@ -146,6 +160,8 @@ _backend_events: dict[str, asyncio.Event] = collections.defaultdict(
     asyncio.Event
 )
 _background_tasks: set[asyncio.Task] = set()
+# Registry record of each connected backend, for liveness checks.
+_global_records: dict[str, Mapping[str, Any]] = {}
 # Capabilities advertised in the registry record of each connected backend.
 _global_capabilities: dict[str, frozenset[str]] = {}
 # Backends that registered but were not connected because of a protocol
@@ -245,7 +261,15 @@ class HeadlessManager:
     logging.info("[HeadlessManager] unregister started for %s", database_id)
     self.spawned_instances.discard(database_id)
     pid = _global_database_id_to_pid.pop(database_id, None)
-    if pid is not None and _is_process_running(pid):
+    record = _global_records.pop(database_id, None)
+    # With a lock file, a PID that was reused by another process after the
+    # backend exited is not signalled.
+    alive = (
+        _record_alive(record)
+        if record is not None
+        else pid is not None and _is_process_running(pid)
+    )
+    if pid is not None and alive:
       _create_background_task(_kill_process_gracefully(pid))
 
   async def close(self, database_id: str) -> None:
@@ -274,8 +298,7 @@ class HeadlessManager:
           metadata.get("database_path") == path
           or metadata.get("filepath") == path
       ):
-        pid = metadata.get("pid")
-        if pid and _is_process_running(pid):
+        if _backend_alive(db_id, metadata.get("pid")):
           raise ToolError(
               f"Database {path} is already connected (ID: {db_id}). DO NOT"
               " attempt to open it again; use the existing ID to access it"
@@ -435,7 +458,7 @@ async def connect_to_backend(registry_file: pathlib.Path) -> None:
     channel = data.get("channel")
     address = data.get("address")
     pid = data.get("pid")
-    if pid and not _is_process_running(pid):
+    if (pid or data.get(liveness.RECORD_FIELD)) and not _record_alive(data):
       logging.info("Cleaning up stale registry file: %s", registry_file)
       _cleanup_stale_registry_file(registry_file, data)
       return
@@ -498,6 +521,7 @@ async def connect_to_backend(registry_file: pathlib.Path) -> None:
       _global_clients[backend_id] = client
       _global_metadata[backend_id] = metadata  # type: ignore
       _global_capabilities[backend_id] = protocol.parse_capabilities(data)
+      _global_records[backend_id] = data
       _global_client_state[backend_id].is_closed = False
       _global_client_state[backend_id].is_broken = False
       logging.info("[Gateway] Successfully connected to backend %s", backend_id)
@@ -838,7 +862,7 @@ async def list_available_databases() -> list[DatabaseInfo]:
             if db_id in _global_metadata
             else None
         )
-        if pid and _is_process_running(pid):
+        if _backend_alive(db_id, pid):
           info = dict(_global_metadata[db_id])
           info["busy"] = True
           available.append(info)  # type: ignore
@@ -855,7 +879,7 @@ async def list_available_databases() -> list[DatabaseInfo]:
           if db_id in _global_metadata
           else None
       )
-      if pid and _is_process_running(pid):
+      if _backend_alive(db_id, pid):
         logging.info(
             "Backend %s is busy (ping failed but process is running)", db_id
         )

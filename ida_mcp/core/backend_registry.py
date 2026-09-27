@@ -29,6 +29,7 @@ import pathlib
 import tempfile
 from typing import Any
 
+from shared import liveness
 from shared import protocol
 
 
@@ -39,6 +40,7 @@ class RegistryManager:
     self.registry_dir = pathlib.Path(registry_dir)
     self.registry_dir.mkdir(parents=True, exist_ok=True)
     self.current_file = None
+    self._lock: liveness.LifetimeLock | None = None
 
   def register(
       self,
@@ -60,6 +62,19 @@ class RegistryManager:
     """
     channel = channel.lower()
 
+    # Hold the lock before the record exists, so a record that names a lock
+    # file always refers to a held lock while this process lives.
+    if self._lock is None:
+      lock = liveness.LifetimeLock(self.registry_dir / f"{name}.lock")
+      if lock.acquire():
+        self._lock = lock
+      elif liveness.supported():
+        logging.warning(
+            "Could not lock %s (another instance with the same name?);"
+            " gateways will check this backend by PID.",
+            lock.path,
+        )
+
     data = {
         "pid": os.getpid(),
         "channel": channel,
@@ -69,6 +84,8 @@ class RegistryManager:
         # Gateways from before the protocol check ignore these keys.
         **protocol.record_fields(),
     }
+    if self._lock is not None:
+      data[liveness.RECORD_FIELD] = self._lock.path
     file_path = self.registry_dir / f"{name}.json"
     temp_path = ""
     try:
@@ -105,3 +122,7 @@ class RegistryManager:
         self.current_file = None
     else:
       self.current_file = None
+    # Release after the record is gone, so no record names a free lock.
+    if self._lock is not None:
+      self._lock.release()
+      self._lock = None

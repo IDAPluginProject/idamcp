@@ -29,6 +29,7 @@ from unittest import mock
 from fastmcp.exceptions import ToolError
 from gateway import forward
 from ida_mcp.core.backend_registry import RegistryManager
+from shared import liveness
 from shared import protocol
 
 # Keys that gateways from before the protocol check read from a record.
@@ -117,9 +118,10 @@ class RegistryRecordTest(unittest.TestCase):
     self.assertEqual(record["name"], "db1")
     self.assertEqual(record["metadata"], {"module": "m"})
     self.assertIsInstance(record["pid"], int)
-    self.assertEqual(
-        set(record), set(_LEGACY_KEYS) | {"protocol_version", "capabilities"}
-    )
+    expected_keys = set(_LEGACY_KEYS) | {"protocol_version", "capabilities"}
+    if liveness.supported():
+      expected_keys.add(liveness.RECORD_FIELD)
+    self.assertEqual(set(record), expected_keys)
     self.assertEqual(record["protocol_version"], protocol.PROTOCOL_VERSION)
     self.assertEqual(
         record["capabilities"], sorted(protocol.BACKEND_CAPABILITIES)
