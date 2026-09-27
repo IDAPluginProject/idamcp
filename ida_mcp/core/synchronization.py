@@ -85,6 +85,42 @@ class IDASafety(enum.IntEnum):
   SAFE_WRITE = ida_kernwin.MFF_WRITE
 
 
+_undo_points_disabled = False
+
+
+def _create_undo_point(tool_name: str) -> None:
+  """Creates an IDA undo point labeled after the tool (GUI only, best effort).
+
+  Lets the user revert a single agent tool call with Ctrl-Z / Edit -> Undo.
+  Skipped in headless mode and when the `gui_undo_points` option is off. If the
+  API is missing or has an unexpected signature (it is
+  `create_undo_point(action_name, label)` on IDA 9.x), logs once and stops
+  trying for the rest of the session. Never raises.
+
+  Args:
+    tool_name: Name of the tool about to run; used in the undo label.
+  """
+  global _undo_points_disabled
+  if _undo_points_disabled or getattr(idaapi, "is_headless", False):
+    return
+  try:
+    # pylint: disable-next=g-import-not-at-top
+    from shared.config import load_config
+
+    if not load_config().get("gui_undo_points", True):
+      return
+    # pylint: disable-next=g-import-not-at-top
+    import ida_undo
+
+    create = getattr(ida_undo, "create_undo_point", None)
+    if create is None:
+      raise AttributeError("ida_undo.create_undo_point is not available")
+    create(f"idamcp:{tool_name}", f"MCP: {tool_name}")
+  except Exception as e:  # pylint: disable=broad-exception-caught
+    _undo_points_disabled = True
+    logger.error("Disabling MCP undo points: %s", e)
+
+
 class _IDACall:
   """Helper to execute a callable on IDA's main thread with safety and cancellation checks."""
 
@@ -114,6 +150,9 @@ class _IDACall:
       self.success = False
       self.result = asyncio.CancelledError("Tool cancelled before execution")
       return
+
+    if self.safety_mode == IDASafety.SAFE_WRITE:
+      _create_undo_point(getattr(self.ff, "__name__", "tool"))
 
     old_batch = idc.batch(1)
     try:
