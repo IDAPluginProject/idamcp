@@ -83,16 +83,24 @@ class SQLiteConnectionLocal(threading.local):
   accesses an attribute on this instance. SQLiteConnectionLocal leverages this
   to record every thread's local namespace dictionary, and intercepts
   __setattr__() to automatically record any sqlite3.Connection stored on it.
+
+  The tracking state is kept in __slots__: threading.local makes only __dict__
+  per-thread, so slot values are shared by all threads.
   """
+
+  __slots__ = ("_lock", "_thread_dicts", "_connections")
 
   _class_lock = threading.Lock()
   _all_instances: weakref.WeakSet["SQLiteConnectionLocal"] = weakref.WeakSet()
 
   def __new__(cls, *args, **kwargs):
     inst = super().__new__(cls)
-    object.__setattr__(inst, "_lock", threading.Lock())
-    object.__setattr__(inst, "_thread_dicts", [])
-    object.__setattr__(inst, "_connections", set())
+    # Bypass the __setattr__ override below, which reads _lock. Not via
+    # object.__setattr__: before Python 3.13 it raises TypeError ("can't apply
+    # this __setattr__ to SQLiteConnectionLocal object").
+    threading.local.__setattr__(inst, "_lock", threading.Lock())
+    threading.local.__setattr__(inst, "_thread_dicts", [])
+    threading.local.__setattr__(inst, "_connections", set())
     with cls._class_lock:
       cls._all_instances.add(inst)
     return inst

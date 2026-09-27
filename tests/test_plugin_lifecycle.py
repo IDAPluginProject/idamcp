@@ -234,6 +234,8 @@ class TestPluginLifecycle(unittest.TestCase):
     conn2 = conn2_ref[0]
     self.assertIn(conn2, tl.connections)
     self.assertEqual(len(tl.connections), 2)
+    # Attributes stay per-thread; only the tracking state is shared.
+    self.assertFalse(hasattr(tl, "ro_conn"))
 
     # Close all connections across threads
     tl.close_all_connections()
