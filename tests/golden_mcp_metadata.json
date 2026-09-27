@@ -2884,7 +2884,7 @@
           "tags": []
         }
       },
-      "description": "Execute Python code in IDA context.\n\nReturns dict with result/stdout/stderr. Has access to all IDA API modules.\nSupports Jupyter-style evaluation (returns the value of the last expression).\nMaintains persistent state across calls.",
+      "description": "Execute Python code in IDA context.\n\nReturns dict with result/stdout/stderr. Has access to all IDA API modules.\nSupports Jupyter-style evaluation (returns the value of the last expression).\nMaintains persistent state across calls; the server can be configured to\nkeep separate state per MCP session.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
