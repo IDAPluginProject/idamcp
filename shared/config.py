@@ -48,6 +48,7 @@ _DEFAULT_CONFIG = {
     "disabled_tools": [],
     "proxy_host": "localhost",
     "proxy_port": 8000,
+    "flush_after_write": False,
 }
 
 
@@ -167,6 +168,7 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
   _set_option_from_env(config, "proxy_host")
   _set_option_from_env(config, "sqlite_persistent")
   _set_option_from_env(config, "check_entries_freshness")
+  _set_option_from_env(config, "flush_after_write")
 
   if not 0 <= config["proxy_port"] <= 65535:
     logging.warning(

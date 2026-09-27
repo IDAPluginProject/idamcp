@@ -237,7 +237,8 @@ example of all available settings (showing defaults):
   "check_entries_freshness": false,
   "disabled_tools": [],
   "proxy_host": "localhost",
-  "proxy_port": 8000
+  "proxy_port": 8000,
+  "flush_after_write": false
 }
 ```
 
@@ -269,6 +270,14 @@ example of all available settings (showing defaults):
     running in SSE or HTTP mode. Defaults to `localhost`.
 *   **proxy_port**: The port the Gateway Proxy binds to when running in SSE or
     HTTP mode. Defaults to `8000`.
+*   **flush_after_write**: If `True`, the IDA plugin calls
+    `ida_loader.flush_buffers()` after every tool call that modifies the
+    database, so IDA's in-memory changes are written to the unpacked database
+    files (`.id0` etc.) right away instead of staying only in memory. This is
+    not a save: the `.idb`/`.i64` file is not repacked. It costs one
+    `flush_buffers` call per modifying tool call and defaults to `False`. If
+    `flush_buffers` is unavailable or fails, one error is logged and flushing
+    stops for that session.
 
 </details>
 
@@ -292,6 +301,8 @@ example of all available settings (showing defaults):
     specific tools (e.g., `^dbg_.*,^patch_.*`).
 *   **PROXY_HOST**: The host for the Gateway Proxy to listen on.
 *   **PROXY_PORT**: The port for the Gateway Proxy to listen on.
+*   **FLUSH_AFTER_WRITE**: Set to `true`, `1`, or `yes` to enable
+    `flush_after_write`.
 
 </details>
 
