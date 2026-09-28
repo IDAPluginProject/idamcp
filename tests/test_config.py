@@ -147,6 +147,17 @@ class TestConfig(unittest.TestCase):
       config = shared.config.load_config(config_path="/nonexistent")
       self.assertTrue(config.get("check_entries_freshness"))
 
+  def test_gui_undo_points_default(self):
+    """Test gui_undo_points is on by default."""
+    config = shared.config.load_config(config_path="/nonexistent")
+    self.assertTrue(config.get("gui_undo_points"))
+
+  def test_gui_undo_points_env(self):
+    """Test GUI_UNDO_POINTS environment variable."""
+    with mock.patch.dict("os.environ", {"GUI_UNDO_POINTS": "0"}):
+      config = shared.config.load_config(config_path="/nonexistent")
+      self.assertFalse(config.get("gui_undo_points"))
+
   def test_no_user_config_env(self):
     """Test that IDAMCP_NO_USER_CONFIG ignores user configuration files."""
     with mock.patch.dict("os.environ", {"IDAMCP_NO_USER_CONFIG": "1"}):
