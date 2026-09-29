@@ -21,178 +21,120 @@
 """Generates a proxy for the IDA MCP."""
 
 import ast
+import bisect
 import glob
+import io
 import os
-
-from tree_sitter import Language
-from tree_sitter import Parser
-from tree_sitter import Query
-from tree_sitter import QueryCursor
-import tree_sitter_python as tspython
+import tokenize
+from typing import Any, Dict, List, Optional
 
 
-def _extract_arg_names(source_code, captures):
-  """Extracts argument names from captures."""
-  arg_names = []
-  if 'params' in captures:
-    params_node = captures['params'][0]
-    for child in params_node.children:
-      if child.type == 'identifier':
-        arg_names.append(
-            source_code[child.start_byte : child.end_byte].decode()
-        )
-      elif (
-          child.type == 'typed_parameter'
-          or child.type == 'default_parameter'
-          or child.type == 'typed_default_parameter'
-      ):
-        if child.child_count > 0 and child.children[0].type == 'identifier':
-          arg_names.append(
-              source_code[
-                  child.children[0].start_byte : child.children[0].end_byte
-              ].decode()
-          )
-  return arg_names
-
-
-def _extract_decorators_and_jsonrpc(source_code, func_node):
-  """Extracts decorators and jsonrpc description."""
-  decorators = []
-  jsonrpc_description = ''
-  if func_node.parent and func_node.parent.type == 'decorated_definition':
-    start_byte = func_node.parent.start_byte
-    for child in func_node.parent.children:
-      if child.type == 'decorator':
-        dec_text = (
-            source_code[child.start_byte : child.end_byte].decode().strip()
-        )
-        decorators.append(dec_text)
-
-        if dec_text.startswith('@jsonrpc'):
-          jsonrpc_description = dec_text[8:]
-  else:
-    start_byte = func_node.start_byte
-  return decorators, jsonrpc_description, start_byte
-
-
-def _extract_prototype(source_code, func_node, body_node, start_byte):
-  """Extracts prototype text."""
-  end_byte = body_node.start_byte
-  for child in func_node.children:
-    if child.type == ':':
-      end_byte = child.end_byte
-      break
-
-  raw_proto = source_code[start_byte:end_byte]
-  prototype_text = raw_proto.decode('utf-8').strip()
-  prototype_text_without_decorator = source_code[
-      func_node.start_byte : end_byte
-  ].decode()
-  return prototype_text, prototype_text_without_decorator
-
-
-def _extract_docstring(source_code, body_node):
-  """Extracts docstring."""
-  docstring = None
-  for child in body_node.children:
-    if child.type == 'comment':
-      continue
-    if child.type == 'expression_statement':
-      string_node = None
-      for subchild in child.children:
-        if subchild.type == 'string':
-          string_node = subchild
-          break
-      if string_node:
-        raw_docstring = source_code[
-            string_node.start_byte : string_node.end_byte
-        ].decode('utf-8')
-        try:
-          docstring = ast.literal_eval(raw_docstring)
-        except (ValueError, TypeError, SyntaxError):
-          docstring = raw_docstring
-    break
-  return docstring
-
-
-def extract_with_treesitter(file_path, decorator_filter=None):
-  """Extracts function info using tree-sitter.
+def extract_with_ast(
+    file_path: str, decorator_filter: Optional[str] = None
+) -> List[Dict[str, Any]]:
+  """Extracts function info using Python built-in AST and tokenize.
 
   Args:
       file_path: Path to the python file.
-      decorator_filter: Optional decorator to filter by.
+      decorator_filter: Optional decorator prefix to filter by.
 
   Returns:
       A list of dictionaries containing function details.
   """
-  # 1. Initialize Parser
-  py_language = Language(tspython.language())
-  parser = Parser(py_language)
+  with open(file_path, 'r', encoding='utf-8') as f:
+    source = f.read()
 
-  with open(file_path, 'rb') as f:
-    source_code = f.read()
+  tree = ast.parse(source)
 
-  # 2. Parse the source code
-  tree = parser.parse(source_code)
-
-  # 3. Define Query
-  # We want to capture the function definition itself (@func)
-  # AND its body (@body) so we know where to stop slicing.
-  query_scm = """
-    (function_definition
-        name: (identifier) @name
-        parameters: (parameters) @params
-        body: (_) @body
-    ) @func
-    """
-  query = Query(py_language, query_scm)
+  # Pre-collect all colon tokens for fast O(log N) lookup
+  colon_ends = []
+  for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+    if tok.type == tokenize.OP and tok.string == ':':
+      colon_ends.append((tok.start, tok.end))
 
   results = []
+  lines = source.splitlines(keepends=True)
 
-  # 4. Iterate over matches
-  cursor = QueryCursor(query)
-  matches = cursor.matches(tree.root_node)
+  # Collect and sort function definitions in document order
+  func_nodes = [
+      node
+      for node in ast.walk(tree)
+      if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+  ]
+  func_nodes.sort(key=lambda n: (n.lineno, n.col_offset))
 
-  # Iterate matches directly
-  for _, captures in matches:
-    # captures is a dict { name: [nodes] }
-    if set(captures.keys()).issuperset({'func', 'body', 'name'}):
-      name_node = captures['name'][0]
-      func_node = captures['func'][0]
-      body_node = captures['body'][0]
-      name = source_code[name_node.start_byte : name_node.end_byte].decode()
+  for node in func_nodes:
+    # Extract decorators and jsonrpc description
+    decorators = []
+    jsonrpc_description = ''
+    for dec_node in node.decorator_list:
+      dec_seg = ast.get_source_segment(source, dec_node)
+      if dec_seg:
+        dec_text = '@' + dec_seg.strip()
+        decorators.append(dec_text)
+        if dec_text.startswith('@jsonrpc'):
+          jsonrpc_description = dec_text[8:]
 
-      # Extract argument names
-      arg_names = _extract_arg_names(source_code, captures)
+    # Filter if needed
+    if decorator_filter and not any(
+        d.startswith(decorator_filter) for d in decorators
+    ):
+      continue
 
-      # Extract decorators
-      decorators, jsonrpc_description, start_byte = (
-          _extract_decorators_and_jsonrpc(source_code, func_node)
-      )
+    name = node.name
 
-      # Filter if needed
-      if decorator_filter and not any(
-          d.startswith(decorator_filter) for d in decorators
-      ):
-        continue
+    # Extract argument names
+    arg_names = []
+    for arg in getattr(node.args, 'posonlyargs', []):
+      arg_names.append(arg.arg)
+    for arg in node.args.args:
+      arg_names.append(arg.arg)
+    if node.args.vararg:
+      arg_names.append(node.args.vararg.arg)
+    for arg in node.args.kwonlyargs:
+      arg_names.append(arg.arg)
+    if node.args.kwarg:
+      arg_names.append(node.args.kwarg.arg)
 
-      # Extract prototype
-      prototype_text, prototype_text_without_decorator = _extract_prototype(
-          source_code, func_node, body_node, start_byte
-      )
+    # Extract prototype text: from function start (def / async def) to the ':' before body[0]
+    func_start = (node.lineno, node.col_offset)
+    body_start = (node.body[0].lineno, node.body[0].col_offset)
 
-      # Extract docstring
-      docstring = _extract_docstring(source_code, body_node)
+    idx = bisect.bisect_right(colon_ends, (body_start, (0, 0)))
+    colon_end = None
+    for i in range(idx - 1, -1, -1):
+      c_start, c_end = colon_ends[i]
+      if c_start >= func_start and c_end <= body_start:
+        colon_end = c_end
+        break
+      if c_start < func_start:
+        break
 
-      results.append({
-          'name': name,
-          'args': arg_names,
-          'prototype': prototype_text,
-          'prototype_without_decorator': prototype_text_without_decorator,
-          'decorators': decorators,
-          'jsonrpc_description': jsonrpc_description,
-          'docstring': docstring,
-      })
+    if colon_end:
+      end_line, end_col = colon_end
+      start_line, start_col = func_start
+
+      if start_line == end_line:
+        proto_without_dec = lines[start_line - 1][start_col:end_col]
+      else:
+        proto_lines = [lines[start_line - 1][start_col:]]
+        proto_lines.extend(lines[start_line : end_line - 1])
+        proto_lines.append(lines[end_line - 1][:end_col])
+        proto_without_dec = ''.join(proto_lines)
+    else:
+      proto_without_dec = ''
+
+    # Docstring
+    docstring = ast.get_docstring(node, clean=False)
+
+    results.append({
+        'name': name,
+        'args': arg_names,
+        'prototype_without_decorator': proto_without_dec,
+        'decorators': decorators,
+        'jsonrpc_description': jsonrpc_description,
+        'docstring': docstring,
+    })
 
   return results
 
@@ -283,9 +225,7 @@ def main():
     if gateway_file.endswith(('proxy.py', '__init__.py')):
       continue
     print(f'Processing {gateway_file}...')
-    gateway_items = extract_with_treesitter(
-        gateway_file, decorator_filter='@mcp_tool'
-    )
+    gateway_items = extract_with_ast(gateway_file, decorator_filter='@mcp_tool')
     gateway_tools.update(item['name'] for item in gateway_items)
   print(f'Found gateway tools: {gateway_tools}')
 
@@ -299,9 +239,7 @@ def main():
       continue
     print(f'Processing {tool_file}...')
     # Extract @jsonrpc tools from backend
-    results.extend(
-        extract_with_treesitter(tool_file, decorator_filter='@jsonrpc')
-    )
+    results.extend(extract_with_ast(tool_file, decorator_filter='@jsonrpc'))
   # 3. Generate Proxy
   with open('gateway/proxy.py', 'w') as f:
     f.write(FIRST_PART)

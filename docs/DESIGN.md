@@ -346,7 +346,7 @@ This is addressed via code generation from backend function signatures.
 
 **Component**: `generators/generate_proxy.py`
 
-This script parses backend source files using `tree-sitter` to perform static
+This script parses backend source files using Python's built-in `ast` parser to perform static
 analysis on the backend implementation.
 
 ### The Pipeline
@@ -354,7 +354,7 @@ analysis on the backend implementation.
 1.  **Scan**: Recursively walks the `ida_mcp/tools/` directory to find all
     Python files.
 2.  **Parse**: Extract every function decorated with `@jsonrpc` using
-    Tree-Sitter.
+    Python's built-in `ast` and `tokenize` modules.
 3.  **Analyze**: Capture the function signature, type hints, docstrings, and
     decorators.
 4.  **Transpile**: Generate a corresponding `async` function for the Proxy.
@@ -366,12 +366,12 @@ analysis on the backend implementation.
 flowchart LR
     Source[Backend Source: ida_mcp/tools/*.py]
     Generator[generators/generate_proxy.py]
-    TreeSitter{Tree-Sitter Parser}
+    AstParser{Python AST Parser}
     Proxy[Output: gateway/proxy.py]
 
     Source --> Generator
-    Generator -- "Extract AST" --> TreeSitter
-    TreeSitter -- "Signatures & Types" --> Generator
+    Generator -- "Extract AST" --> AstParser
+    AstParser -- "Signatures & Types" --> Generator
     Generator -- "Inject Routing Logic" --> Proxy
 ```
 
