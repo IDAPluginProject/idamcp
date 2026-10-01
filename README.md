@@ -243,8 +243,6 @@ example of all available settings (showing defaults):
   "sqlite_persistent": false,
   "check_entries_freshness": false,
   "disabled_tools": [],
-  "proxy_host": "localhost",
-  "proxy_port": 8000,
   "flush_after_write": false,
   "gui_undo_points": false,
   "tool_mode": "hybrid",
@@ -287,10 +285,6 @@ example of all available settings (showing defaults):
 *   **disabled_tools**: A list of case-insensitive regular expressions. Any tool
     whose name matches a pattern in this list will not be registered. Use this
     to restrict the agent's capabilities.
-*   **proxy_host**: The hostname or IP address the Gateway Proxy binds to when
-    running in SSE or HTTP mode. Defaults to `localhost`.
-*   **proxy_port**: The port the Gateway Proxy binds to when running in SSE or
-    HTTP mode. Defaults to `8000`.
 *   **flush_after_write**: If `True`, the IDA plugin calls
     `ida_loader.flush_buffers()` after every tool call that modifies the
     database, so IDA's in-memory changes are written to the unpacked database
@@ -343,8 +337,6 @@ example of all available settings (showing defaults):
     enable (e.g., `idapython_eval,dbg_step_over`).
 *   **DISABLED_TOOLS**: A comma-separated list of regular expressions to disable
     specific tools (e.g., `^dbg_.*,^patch_.*`).
-*   **PROXY_HOST**: The host for the Gateway Proxy to listen on.
-*   **PROXY_PORT**: The port for the Gateway Proxy to listen on.
 *   **FLUSH_AFTER_WRITE**: Set to `true`, `1`, or `yes` to enable
     `flush_after_write`.
 *   **TOOL_MODE**: Set to `"hybrid"`, `"full"`, or `"code_mode"` to configure

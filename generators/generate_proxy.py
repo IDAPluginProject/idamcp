@@ -162,9 +162,9 @@ FIRST_PART = """# Copyright (c) 2026 Google LLC
 # WARNING: This file is generated, DO NOT edit it directly.
 import argparse
 import contextlib
+import sys
 from typing import Annotated, Any, Dict, List, Literal
 from gateway.forward import forward_to, mcp_server, mcp_tool
-from shared.config import load_config
 from shared.types import *
 
 try:
@@ -188,7 +188,6 @@ except ImportError as e:
 
 LAST_PART = """
 if __name__ == "__main__":
-  config = load_config()
   parser = argparse.ArgumentParser()
   parser.add_argument(
       "--transport", default="sse", choices=["sse", "stdio", "http"]
@@ -202,14 +201,11 @@ if __name__ == "__main__":
   args = parser.parse_args()
 
   if args.transport in ["sse", "http"]:
-    host = (
-        args.host
-        if args.host is not None
-        else config.get("proxy_host", "localhost")
-    )
-    port = (
-        args.port if args.port is not None else config.get("proxy_port", 8000)
-    )
+    host = args.host or "localhost"
+    if args.port is not None and not 0 <= args.port < 65536:
+      sys.exit(f"Invalid port {args.port}")
+    port = args.port if args.port is not None else 8000
+
     with contextlib.suppress(KeyboardInterrupt):
       mcp_server.run(transport=args.transport, host=host, port=port)
   else:

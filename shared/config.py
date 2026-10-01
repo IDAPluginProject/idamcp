@@ -58,8 +58,6 @@ _DEFAULT_CONFIG = {
     "sqlite_persistent": False,
     "check_entries_freshness": False,
     "disabled_tools": [],
-    "proxy_host": "localhost",
-    "proxy_port": 8000,
     "flush_after_write": False,
     "gui_undo_points": False,
     "tool_mode": "hybrid",  # "full" | "hybrid" | "code_mode"
@@ -186,21 +184,12 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
   _set_option_from_env(config, "enabled_unsafe_tools")
   _set_option_from_env(config, "enable_all_unsafe_tools")
   _set_option_from_env(config, "disabled_tools")
-  _set_option_from_env(config, "proxy_port")
-  _set_option_from_env(config, "proxy_host")
   _set_option_from_env(config, "sqlite_persistent")
   _set_option_from_env(config, "check_entries_freshness")
   _set_option_from_env(config, "flush_after_write")
   _set_option_from_env(config, "gui_undo_points")
   _set_option_from_env(config, "tool_mode")
   _set_option_from_env(config, "always_visible_tools")
-
-  if not 0 <= config["proxy_port"] <= 65535:
-    logging.warning(
-        "PROXY_PORT %d is out of valid range (0-65535). Using default.",
-        config["proxy_port"],
-    )
-    config["proxy_port"] = _DEFAULT_CONFIG["proxy_port"]
 
   # Expand registry_dir path
   config["registry_dir"] = pathlib.Path(config["registry_dir"]).expanduser()
