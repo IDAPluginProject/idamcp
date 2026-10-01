@@ -748,7 +748,35 @@ async def lifespan(app):
     await cleanup_logic()
 
 
-mcp_server = FastMCP("IDA Dynamic Proxy Gateway", lifespan=lifespan)
+def _build_mcp_transforms() -> list[Any]:
+  mode = str(CONFIG.get("tool_mode", "hybrid")).lower().strip()
+  if mode == "hybrid":
+    from fastmcp.server.transforms.search import BM25SearchTransform  # pylint: disable=g-import-not-at-top
+    from fastmcp.server.transforms.search.base import serialize_tools_for_output_markdown  # pylint: disable=g-import-not-at-top
+    from shared.config import _DEFAULT_ALWAYS_VISIBLE_TOOLS  # pylint: disable=g-import-not-at-top
+
+    always_visible = CONFIG.get(
+        "always_visible_tools", _DEFAULT_ALWAYS_VISIBLE_TOOLS
+    )
+    return [
+        BM25SearchTransform(
+            max_results=6,
+            always_visible=always_visible,
+            search_result_serializer=serialize_tools_for_output_markdown,
+        )
+    ]
+  elif mode == "code_mode":
+    from fastmcp.experimental.transforms.code_mode import CodeMode  # pylint: disable=g-import-not-at-top
+
+    return [CodeMode()]
+  return []
+
+
+mcp_server = FastMCP(
+    "IDA Dynamic Proxy Gateway",
+    lifespan=lifespan,
+    transforms=_build_mcp_transforms(),
+)
 
 
 def mcp_tool(func=None, *args, **kwargs):

@@ -55,6 +55,9 @@ The system architecture incorporates the following design choices:
     tools (e.g., Python execution) and active session tracking.
 10. **Robustness & Concurrency**: Non-blocking error handling, thread safety
     synchronization, and structured result formatting across all tools.
+11. **Configurable Tool Exposure (`tool_mode`)**: Three-tier FastMCP transform
+    architecture (`"hybrid"`, `"code_mode"`, `"full"`) to balance upfront prompt
+    context footprint against single-step tool call ergonomics.
 
 --------------------------------------------------------------------------------
 
@@ -129,6 +132,33 @@ practical pattern for bridging AI Agents with multiple MCP server instances:
 
 This pattern can also be adapted to other MCP servers wrapping interactive
 desktop tools.
+
+### 2.3 Configurable Tool Exposure (`tool_mode`)
+
+Exposing all ~68 `@mcp_tool` schemas upfront in `tools/list` can consume
+substantial prompt context for MCP clients that do not lazily load or filter
+tools, whereas collapsing everything into a single code-execution tool forces
+agents to write boilerplate loops for routine operations.
+
+To accommodate different MCP clients and agent workflows without altering
+`gateway/proxy.py`, the Gateway (`gateway/forward.py`) configures FastMCP server
+transforms based on the `tool_mode` setting (`TOOL_MODE` environment variable):
+
+1.  **`"hybrid"` (Default)**: Applies FastMCP's `BM25SearchTransform` with
+    Markdown result serialization (`serialize_tools_for_output_markdown`). Core
+    high-frequency tools (configurable via `always_visible_tools` /
+    `ALWAYS_VISIBLE_TOOLS`, defaulting to `list_available_databases`,
+    `idalib_headless_open`, `idalib_headless_close`, `sql_query`,
+    `decompile_function`, `disassemble_function`, `disassemble_code`,
+    `get_ida_view`, `hexdump`, `idapython_eval`) remain pinned via
+    `always_visible` for direct 1-step invocation, while the remaining ~58
+    specialized tools are discovered on-demand via `search_tools` and invoked
+    via `call_tool` (~70% fewer schema tokens than full JSON Schema).
+2.  **`"code_mode"`**: Applies FastMCP's `CodeMode` transform (`search`,
+    `get_schema`, `execute`), enabling the agent to chain multiple `await
+    call_tool(...)` calls inside a single sandboxed Python execution block.
+3.  **`"full"`**: Applies no transforms, exposing all registered tools directly
+    in `tools/list`.
 
 --------------------------------------------------------------------------------
 
@@ -346,15 +376,15 @@ This is addressed via code generation from backend function signatures.
 
 **Component**: `generators/generate_proxy.py`
 
-This script parses backend source files using Python's built-in `ast` parser to perform static
-analysis on the backend implementation.
+This script parses backend source files using Python's built-in `ast` parser to
+perform static analysis on the backend implementation.
 
 ### The Pipeline
 
 1.  **Scan**: Recursively walks the `ida_mcp/tools/` directory to find all
     Python files.
-2.  **Parse**: Extract every function decorated with `@jsonrpc` using
-    Python's built-in `ast` and `tokenize` modules.
+2.  **Parse**: Extract every function decorated with `@jsonrpc` using Python's
+    built-in `ast` and `tokenize` modules.
 3.  **Analyze**: Capture the function signature, type hints, docstrings, and
     decorators.
 4.  **Transpile**: Generate a corresponding `async` function for the Proxy.

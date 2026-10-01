@@ -94,6 +94,12 @@ Key capabilities of this implementation include:
     supports UDS for secure local communication in isolated environments
     (Linux/macOS).
 
+*   **Configurable Tool Exposure (`tool_mode`)**: Supports three MCP tool
+    exposure strategies via FastMCP transforms—`"hybrid"` (default, pins core
+    high-frequency tools upfront and exposes the rest on-demand via BM25
+    search), `"code_mode"` (collapses tools into sandboxed Python discovery and
+    execution), and `"full"` (exposes all ~68 tools upfront).
+
 </details>
 
 <details>
@@ -209,7 +215,8 @@ For the best experience, save these recommended settings to `~/.idamcp.json`:
   "enabled_unsafe_tools": ["idapython_eval"],
   "opcode_bytes": 8,
   "populate_tables_on_startup": true,
-  "sqlite_persistent": true
+  "sqlite_persistent": true,
+  "tool_mode": "hybrid"
 }
 ```
 
@@ -239,7 +246,20 @@ example of all available settings (showing defaults):
   "proxy_host": "localhost",
   "proxy_port": 8000,
   "flush_after_write": false,
-  "gui_undo_points": true
+  "gui_undo_points": true,
+  "tool_mode": "hybrid",
+  "always_visible_tools": [
+    "list_available_databases",
+    "idalib_headless_open",
+    "idalib_headless_close",
+    "sql_query",
+    "decompile_function",
+    "disassemble_function",
+    "disassemble_code",
+    "get_ida_view",
+    "hexdump",
+    "idapython_eval"
+  ]
 }
 ```
 
@@ -283,6 +303,23 @@ example of all available settings (showing defaults):
     undo point labeled `MCP: <tool name>` before each tool call that modifies
     the database, so each agent change can be reverted with `Ctrl + Z` /
     Edit -> Undo. Not used in headless mode.
+*   **tool_mode**: Controls how the Gateway exposes MCP tools to the client.
+    Supported values are `"hybrid"` (default), `"full"`, and `"code_mode"`:
+    *   `"hybrid"`: Uses FastMCP's `BM25SearchTransform` to keep core
+        high-frequency tools (configured via `always_visible_tools`) directly
+        visible, while placing the remaining tools behind on-demand
+        `search_tools` and `call_tool` with compact Markdown schema
+        serialization (~70% fewer tokens than JSON Schema).
+    *   `"full"`: Exposes all ~68 tools upfront in `tools/list`.
+    *   `"code_mode"`: Uses FastMCP's `CodeMode` transform (`search`,
+        `get_schema`, `execute`) to allow chaining multiple `await
+        call_tool(...)` invocations inside a single sandboxed Python block.
+*   **always_visible_tools**: A list of tool names that remain directly visible
+    in `tools/list` when `tool_mode` is set to `"hybrid"`. Defaults to
+    `["list_available_databases", "idalib_headless_open",
+    "idalib_headless_close", "sql_query", "decompile_function",
+    "disassemble_function", "disassemble_code", "get_ida_view", "hexdump",
+    "idapython_eval"]`.
 
 </details>
 
@@ -309,6 +346,11 @@ example of all available settings (showing defaults):
 *   **PROXY_PORT**: The port for the Gateway Proxy to listen on.
 *   **FLUSH_AFTER_WRITE**: Set to `true`, `1`, or `yes` to enable
     `flush_after_write`.
+*   **TOOL_MODE**: Set to `"hybrid"`, `"full"`, or `"code_mode"` to configure
+    the Gateway's tool exposure mode.
+*   **ALWAYS_VISIBLE_TOOLS**: A comma-separated list of tool names that remain
+    directly visible when `tool_mode` is `"hybrid"` (e.g.,
+    `list_available_databases,sql_query,decompile_function`).
 
 </details>
 

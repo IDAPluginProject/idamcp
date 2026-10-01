@@ -214,3 +214,51 @@ class TestHeadlessManager(unittest.IsolatedAsyncioTestCase):
 
       mock_unregister.assert_not_called()
       self.assertIn("db1", _headless_manager.spawned_instances)
+
+  def test_build_mcp_transforms_hybrid(self):
+    """Test _build_mcp_transforms returns BM25SearchTransform for hybrid."""
+    from gateway.forward import _build_mcp_transforms
+    from fastmcp.server.transforms.search import BM25SearchTransform
+    from shared.config import _DEFAULT_ALWAYS_VISIBLE_TOOLS
+
+    with mock.patch("gateway.forward.CONFIG", {"tool_mode": "hybrid"}):
+      transforms = _build_mcp_transforms()
+      self.assertEqual(len(transforms), 1)
+      self.assertIsInstance(transforms[0], BM25SearchTransform)
+      self.assertEqual(
+          set(transforms[0]._always_visible),
+          set(_DEFAULT_ALWAYS_VISIBLE_TOOLS),
+      )
+
+  def test_build_mcp_transforms_hybrid_custom_always_visible(self):
+    """Test _build_mcp_transforms respects custom always_visible_tools."""
+    from gateway.forward import _build_mcp_transforms
+    from fastmcp.server.transforms.search import BM25SearchTransform
+
+    custom_tools = ["list_available_databases", "sql_query", "patch_assembly"]
+    with mock.patch(
+        "gateway.forward.CONFIG",
+        {"tool_mode": "hybrid", "always_visible_tools": custom_tools},
+    ):
+      transforms = _build_mcp_transforms()
+      self.assertEqual(len(transforms), 1)
+      self.assertIsInstance(transforms[0], BM25SearchTransform)
+      self.assertEqual(set(transforms[0]._always_visible), set(custom_tools))
+
+  def test_build_mcp_transforms_code_mode(self):
+    """Test _build_mcp_transforms returns CodeMode for code_mode."""
+    from gateway.forward import _build_mcp_transforms
+    from fastmcp.experimental.transforms.code_mode import CodeMode
+
+    with mock.patch("gateway.forward.CONFIG", {"tool_mode": "code_mode"}):
+      transforms = _build_mcp_transforms()
+      self.assertEqual(len(transforms), 1)
+      self.assertIsInstance(transforms[0], CodeMode)
+
+  def test_build_mcp_transforms_full(self):
+    """Test _build_mcp_transforms returns empty list for full mode."""
+    from gateway.forward import _build_mcp_transforms
+
+    with mock.patch("gateway.forward.CONFIG", {"tool_mode": "full"}):
+      transforms = _build_mcp_transforms()
+      self.assertEqual(transforms, [])

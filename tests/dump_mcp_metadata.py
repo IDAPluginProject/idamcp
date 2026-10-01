@@ -72,6 +72,7 @@ def _isolate_config(tmp_dir: pathlib.Path) -> None:
           {
               "registry_dir": str(tmp_dir / "registry"),
               "uds_dir": str(tmp_dir / "uds"),
+              "tool_mode": "full",
           }
       ),
       encoding="utf-8",
@@ -94,7 +95,7 @@ async def _collect() -> dict[str, Any]:
 
   # pylint: enable=g-import-not-at-top
 
-  async with fastmcp.Client(mcp_server) as client:
+  async with fastmcp.Client(mcp_server, mode="legacy") as client:
     initialize = _dump_model(client.initialize_result)
     tools = await client.list_tools()
     resources = await client.list_resources()

@@ -184,5 +184,51 @@ class TestConfig(unittest.TestCase):
           self.assertEqual(config["communication_channel"], "tcp")
 
 
+  def test_tool_mode_default(self):
+    """Test tool_mode is 'hybrid' by default."""
+    config = shared.config.load_config(config_path="/nonexistent")
+    self.assertEqual(config.get("tool_mode"), "hybrid")
+
+  def test_tool_mode_env(self):
+    """Test TOOL_MODE environment variable."""
+    with mock.patch.dict("os.environ", {"TOOL_MODE": "code_mode"}):
+      config = shared.config.load_config(config_path="/nonexistent")
+      self.assertEqual(config.get("tool_mode"), "code_mode")
+
+  def test_always_visible_tools_default(self):
+    """Test always_visible_tools default list."""
+    config = shared.config.load_config(config_path="/nonexistent")
+    self.assertEqual(
+        config.get("always_visible_tools"),
+        shared.config._DEFAULT_ALWAYS_VISIBLE_TOOLS,
+    )
+
+  def test_always_visible_tools_user(self):
+    """Test custom always_visible_tools in user config file."""
+    with mock.patch(
+        "builtins.open",
+        mock.mock_open(
+            read_data='{"always_visible_tools": ["sql_query", "hexdump"]}'
+        ),
+    ):
+      with mock.patch("pathlib.Path.is_file", return_value=True):
+        config = shared.config.load_config()
+        self.assertEqual(
+            config.get("always_visible_tools"), ["sql_query", "hexdump"]
+        )
+
+  def test_always_visible_tools_env(self):
+    """Test ALWAYS_VISIBLE_TOOLS environment variable."""
+    with mock.patch.dict(
+        "os.environ",
+        {"ALWAYS_VISIBLE_TOOLS": "list_available_databases, sql_query"},
+    ):
+      config = shared.config.load_config(config_path="/nonexistent")
+      self.assertEqual(
+          config.get("always_visible_tools"),
+          ["list_available_databases", "sql_query"],
+      )
+
+
 if __name__ == "__main__":
   unittest.main()

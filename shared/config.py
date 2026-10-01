@@ -32,6 +32,18 @@ from typing import Any
 _DEFAULT_UDS_DIR = pathlib.Path(tempfile.gettempdir()) / "ida_mcp_uds"
 _DEFAULT_REGISTRY_DIR = pathlib.Path.home() / ".ida_mcp_registry"
 _DEFAULT_CHANNEL = "tcp" if sys.platform == "win32" else "uds"
+_DEFAULT_ALWAYS_VISIBLE_TOOLS = [
+    "list_available_databases",
+    "idalib_headless_open",
+    "idalib_headless_close",
+    "sql_query",
+    "decompile_function",
+    "disassemble_function",
+    "disassemble_code",
+    "get_ida_view",
+    "hexdump",
+    "idapython_eval",
+]
 _DEFAULT_CONFIG = {
     "communication_channel": _DEFAULT_CHANNEL,
     "registry_dir": _DEFAULT_REGISTRY_DIR,
@@ -50,6 +62,8 @@ _DEFAULT_CONFIG = {
     "proxy_port": 8000,
     "flush_after_write": False,
     "gui_undo_points": True,
+    "tool_mode": "hybrid",  # "full" | "hybrid" | "code_mode"
+    "always_visible_tools": _DEFAULT_ALWAYS_VISIBLE_TOOLS,
 }
 
 
@@ -85,8 +99,12 @@ def _set_option_from_env(
   elif isinstance(default_option, int):
     config[option_name] = int(env_val.lower())
   elif isinstance(default_option, list):
-    config[option_name].extend(filter(len, map(str.strip, env_val.split(","))))
-    config[option_name] = list(set(config[option_name]))
+    items = list(filter(len, map(str.strip, env_val.split(","))))
+    if default_option:
+      config[option_name] = list(dict.fromkeys(items))
+    else:
+      config[option_name].extend(items)
+      config[option_name] = list(set(config[option_name]))
   elif isinstance(default_option, str):
     config[option_name] = env_val
   elif isinstance(default_option, pathlib.Path):
@@ -129,7 +147,10 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
   else:
     path = pathlib.Path(config_path).expanduser()
 
-  config = _DEFAULT_CONFIG.copy()
+  config = {
+      k: list(v) if isinstance(v, list) else v
+      for k, v in _DEFAULT_CONFIG.items()
+  }
 
   if path is not None and path.is_file():
     try:
@@ -171,6 +192,8 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
   _set_option_from_env(config, "check_entries_freshness")
   _set_option_from_env(config, "flush_after_write")
   _set_option_from_env(config, "gui_undo_points")
+  _set_option_from_env(config, "tool_mode")
+  _set_option_from_env(config, "always_visible_tools")
 
   if not 0 <= config["proxy_port"] <= 65535:
     logging.warning(
