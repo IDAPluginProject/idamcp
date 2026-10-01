@@ -65,8 +65,8 @@ class TestParseLoadOptions(unittest.TestCase):
         ],
     )
 
-  def test_loader_without_space_is_unquoted(self):
-    self.assertEqual(parse_load_options(loader="ELF").to_ida_args(), "-TELF")
+  def test_loader_without_space_is_quoted(self):
+    self.assertEqual(parse_load_options(loader="ELF").to_ida_args(), '-T"ELF"')
 
   def test_base_address_forms(self):
     self.assertEqual(

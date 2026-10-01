@@ -34,6 +34,7 @@ process. This module only uses the standard library.
 """
 
 import dataclasses
+import json
 import re
 
 # The first character must be alphanumeric so a value can never start with
@@ -69,9 +70,7 @@ class LoadOptions:
     if self.processor is not None:
       parts.append(f"-p{self.processor}")
     if self.loader is not None:
-      parts.append(
-          f'-T"{self.loader}"' if " " in self.loader else f"-T{self.loader}"
-      )
+      parts.append(f"-T{json.dumps(self.loader)}")
     if self.base_address is not None:
       parts.append(f"-b{self.base_address >> 4:X}")
     return " ".join(parts)
@@ -91,8 +90,7 @@ class LoadOptions:
 def _blank_to_none(value: str | None) -> str | None:
   if value is None:
     return None
-  value = value.strip()
-  return value or None
+  return value.strip() or None
 
 
 def parse_load_options(
@@ -103,10 +101,8 @@ def parse_load_options(
   """Validates raw values and returns LoadOptions.
 
   Args:
-    processor: IDA processor module name (`-p`), e.g. "metapc" or
-      "arm:ARMv7-M".
-    loader: file type name or prefix as IDA lists it (`-T`), e.g.
-      "Binary file".
+    processor: IDA processor module name (`-p`), e.g. "metapc" or "arm:ARMv7-M".
+    loader: file type name or prefix as IDA lists it (`-T`), e.g. "Binary file".
     base_address: load address as an int or a string accepted by `int(x, 0)`
       (e.g. "0x10000"); must be 16-byte aligned.
 
