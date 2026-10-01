@@ -87,6 +87,7 @@ def _init_session_globals():
       "ida_range",
       "ida_regfinder",
       "ida_registry",
+      "ida_idaapi",
       "ida_search",
       "ida_segment",
       "ida_segregs",
