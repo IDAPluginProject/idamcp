@@ -666,6 +666,9 @@ async def forward_to(target: str, tool_name: str, args: dict[str, Any]) -> Any:
 
 def shutdown_clients() -> None:
   logging.info("[Gateway] shutdown_clients triggered")
+  if hasattr(signal, "SIGTERM"):
+    with contextlib.suppress(Exception):
+      signal.signal(signal.SIGTERM, signal.SIG_IGN)
   if not _global_clients:
     logging.info("[Gateway] shutdown_clients: no active clients to disconnect")
     return

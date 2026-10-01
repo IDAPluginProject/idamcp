@@ -262,3 +262,14 @@ class TestHeadlessManager(unittest.IsolatedAsyncioTestCase):
     with mock.patch("gateway.forward.CONFIG", {"tool_mode": "full"}):
       transforms = _build_mcp_transforms()
       self.assertEqual(transforms, [])
+
+  def test_shutdown_clients_ignores_sigterm(self):
+    """Test shutdown_clients sets SIGTERM handler to SIG_IGN."""
+    import signal
+    from gateway.forward import shutdown_clients
+
+    _global_clients.clear()
+    with mock.patch("signal.signal") as mock_signal:
+      shutdown_clients()
+      if hasattr(signal, "SIGTERM"):
+        mock_signal.assert_called_once_with(signal.SIGTERM, signal.SIG_IGN)
