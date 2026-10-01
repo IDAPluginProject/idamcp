@@ -148,15 +148,15 @@ class TestConfig(unittest.TestCase):
       self.assertTrue(config.get("check_entries_freshness"))
 
   def test_gui_undo_points_default(self):
-    """Test gui_undo_points is on by default."""
+    """Test gui_undo_points is off by default."""
     config = shared.config.load_config(config_path="/nonexistent")
-    self.assertTrue(config.get("gui_undo_points"))
+    self.assertFalse(config.get("gui_undo_points"))
 
   def test_gui_undo_points_env(self):
     """Test GUI_UNDO_POINTS environment variable."""
-    with mock.patch.dict("os.environ", {"GUI_UNDO_POINTS": "0"}):
+    with mock.patch.dict("os.environ", {"GUI_UNDO_POINTS": "1"}):
       config = shared.config.load_config(config_path="/nonexistent")
-      self.assertFalse(config.get("gui_undo_points"))
+      self.assertTrue(config.get("gui_undo_points"))
 
   def test_no_user_config_env(self):
     """Test that IDAMCP_NO_USER_CONFIG ignores user configuration files."""
@@ -182,7 +182,6 @@ class TestConfig(unittest.TestCase):
         with mock.patch("pathlib.Path.is_file", return_value=True):
           config = shared.config.load_config()
           self.assertEqual(config["communication_channel"], "tcp")
-
 
   def test_tool_mode_default(self):
     """Test tool_mode is 'hybrid' by default."""

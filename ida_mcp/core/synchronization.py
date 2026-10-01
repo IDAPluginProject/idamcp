@@ -107,15 +107,12 @@ def _create_undo_point(tool_name: str) -> None:
     # pylint: disable-next=g-import-not-at-top
     from shared.config import load_config
 
-    if not load_config().get("gui_undo_points", True):
+    if not load_config().get("gui_undo_points", False):
       return
     # pylint: disable-next=g-import-not-at-top
     import ida_undo
 
-    create = getattr(ida_undo, "create_undo_point", None)
-    if create is None:
-      raise AttributeError("ida_undo.create_undo_point is not available")
-    create(f"idamcp:{tool_name}", f"MCP: {tool_name}")
+    ida_undo.create_undo_point(f"idamcp:{tool_name}", f"MCP: {tool_name}")
   except Exception as e:  # pylint: disable=broad-exception-caught
     _undo_points_disabled = True
     logger.error("Disabling MCP undo points: %s", e)

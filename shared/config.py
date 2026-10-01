@@ -61,7 +61,7 @@ _DEFAULT_CONFIG = {
     "proxy_host": "localhost",
     "proxy_port": 8000,
     "flush_after_write": False,
-    "gui_undo_points": True,
+    "gui_undo_points": False,
     "tool_mode": "hybrid",  # "full" | "hybrid" | "code_mode"
     "always_visible_tools": _DEFAULT_ALWAYS_VISIBLE_TOOLS,
 }

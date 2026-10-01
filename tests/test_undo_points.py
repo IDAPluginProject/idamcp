@@ -58,7 +58,7 @@ class TestGuiUndoPoints(unittest.TestCase):
             side_effect=lambda a, l: self.events.append(("undo", a, l)) or True
         )
     )
-    self.config = {}
+    self.config = {"gui_undo_points": True}
     self.patches = [
         mock.patch.object(synchronization, "IDASafety", _Safety),
         mock.patch.object(synchronization, "_undo_points_disabled", False),
@@ -117,6 +117,11 @@ class TestGuiUndoPoints(unittest.TestCase):
 
   def test_config_off_has_no_point(self):
     self.config = {"gui_undo_points": False}
+    self._run(self._tool(), _Safety.SAFE_WRITE)
+    self.assertEqual(self.events, [("tool",)])
+
+  def test_default_config_has_no_point(self):
+    self.config = {}
     self._run(self._tool(), _Safety.SAFE_WRITE)
     self.assertEqual(self.events, [("tool",)])
 
