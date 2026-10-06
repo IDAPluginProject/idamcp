@@ -474,14 +474,36 @@ The server provides a Python execution tool (`idapython_eval`) designed to let
 agents interact dynamically with the IDA Pro Python API (IDAPython).
 
 The execution logic was adapted from `ida-pro-mcp` and updated to support
-interactive evaluation and persistent session state.
+interactive evaluation and opt-in persistent state.
 
 ### 7.1 Core Features
 
-*   **Persistent State**: Maintains a persistent session dictionary
-    (`_session_globals`). Variables, helper functions, and imported modules
-    defined in a previous tool call remain in-memory and available in subsequent
-    calls, enabling multi-step script composition.
+*   **Ephemeral or Persistent**: Each call is one or the other. By default, a
+    call runs in a fresh namespace seeded with the IDA modules and helpers; it
+    is cleared on IDA's main thread when the call returns, so objects it holds
+    (including SWIG-wrapped IDA objects) are freed there. With
+    `persist_globals=True`, the call runs in a single namespace shared by all
+    callers, so variables, helper functions, and imported modules persist
+    across calls and are visible to every agent. Ephemeral calls neither see
+    nor modify it. IDA modules and helpers are re-applied on every persistent
+    call, so rebinding or deleting e.g. `idc` cannot break later calls. The
+    shared namespace is cleared on IDA's main thread when the plugin
+    terminates or the headless server shuts down. Objects that must outlive a
+    call (hooks, timers, callbacks) need `persist_globals=True`.
+*   **Execution Timeout**: `timeout` (default 360 seconds) limits how long the
+    code may run. The `@idawrite` wrapper reads it from the call's arguments,
+    as it does for any `@idaread`/`@idawrite` function with a `timeout`
+    parameter, and starts the clock when the code starts running on IDA's main
+    thread, so time spent waiting behind other calls does not count. When time
+    is up, the code is interrupted like a cancelled call: an asynchronous
+    exception, plus IDA's cancel flag for long-running IDA functions. The
+    interrupt is repeated on the cancel back-off in case it was swallowed. The
+    call then fails with `ToolTimeoutError`, which the client receives as a
+    regular tool error with the message "Operation timed out after N.NNs".
+    The message ends with the stdout and stderr the code printed before the
+    timeout: `idapython_eval` attaches them to the interrupt as exception
+    notes (`__notes__`) while it unwinds, and the wrapper appends the notes of
+    the interrupt to the timeout error.
 *   **Jupyter-Style Interactive Evaluation**: Utilizes Abstract Syntax Tree
     (AST) parsing to divide input code blocks into statements and expressions.
     It automatically executes statements via `exec()` and evaluates the final

@@ -291,12 +291,12 @@ def get_struct_at_address(
           try:
             byte_val = idaapi.get_byte(member_addr + i)
             bytes_data.append(f"{byte_val:02X}")
-          except:
+          except Exception:  # pylint: disable=broad-exception-caught
             break
         value_str = (
             f"[{' '.join(bytes_data)}{'...' if member_size > 16 else ''}]"
         )
-    except:
+    except Exception:  # pylint: disable=broad-exception-caught
       value_str = "<failed to read>"
 
     member_info = {

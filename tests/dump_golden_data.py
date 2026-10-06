@@ -386,7 +386,8 @@ def dump_metadata() -> dict:
       "filetype": _get_file_type_desc(),
       "bitness": idaapi.inf_get_app_bitness(),
       "procname": idaapi.inf_get_procname(),
-      "is_headless": not idaapi.is_idaq(),
+      # test_tools checks this against real headless (idalib) instances.
+      "is_headless": True,
   }
 
 

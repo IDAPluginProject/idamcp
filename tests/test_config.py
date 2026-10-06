@@ -31,6 +31,13 @@ class TestConfig(unittest.TestCase):
   """Tests for the load_config function."""
 
   def setUp(self):
+    # Snapshot first: cleanups run after tearDown. AUTOSTART and HOTKEY are
+    # generic names that other tools may set.
+    env = mock.patch.dict(os.environ)
+    env.start()
+    self.addCleanup(env.stop)
+    os.environ.pop("AUTOSTART", None)
+    os.environ.pop("HOTKEY", None)
     self._orig_no_user_config = os.environ.get("IDAMCP_NO_USER_CONFIG")
     if "IDAMCP_NO_USER_CONFIG" in os.environ:
       del os.environ["IDAMCP_NO_USER_CONFIG"]
@@ -157,6 +164,47 @@ class TestConfig(unittest.TestCase):
     with mock.patch.dict("os.environ", {"GUI_UNDO_POINTS": "1"}):
       config = shared.config.load_config(config_path="/nonexistent")
       self.assertTrue(config.get("gui_undo_points"))
+
+  def test_autostart_and_hotkey_defaults(self):
+    """Test autostart is off and the hotkey is Ctrl-Alt-M by default."""
+    config = shared.config.load_config(config_path="/nonexistent")
+    self.assertIs(config.get("autostart"), False)
+    self.assertEqual(config.get("hotkey"), "Ctrl-Alt-M")
+
+  def test_autostart_and_hotkey_user(self):
+    """Test user-defined autostart and hotkey values."""
+    with mock.patch(
+        "builtins.open",
+        mock.mock_open(read_data='{"autostart": true, "hotkey": ""}'),
+    ):
+      with mock.patch("pathlib.Path.is_file", return_value=True):
+        config = shared.config.load_config()
+        self.assertIs(config.get("autostart"), True)
+        self.assertEqual(config.get("hotkey"), "")
+
+  def test_autostart_and_hotkey_env(self):
+    """Test AUTOSTART and HOTKEY override the config file."""
+    with mock.patch.dict(
+        "os.environ", {"AUTOSTART": "yes", "HOTKEY": " Ctrl-Shift-K "}
+    ):
+      config = shared.config.load_config(config_path="/nonexistent")
+    self.assertIs(config.get("autostart"), True)
+    self.assertEqual(config.get("hotkey"), "Ctrl-Shift-K")
+
+    shared.config.load_config.cache_clear()
+    with (
+        mock.patch.dict("os.environ", {"AUTOSTART": "0", "HOTKEY": ""}),
+        mock.patch(
+            "builtins.open",
+            mock.mock_open(
+                read_data='{"autostart": true, "hotkey": "Ctrl-Alt-K"}'
+            ),
+        ),
+        mock.patch("pathlib.Path.is_file", return_value=True),
+    ):
+      config = shared.config.load_config(config_path="/custom/path.json")
+    self.assertIs(config.get("autostart"), False)
+    self.assertEqual(config.get("hotkey"), "")  # No shortcut.
 
   def test_no_user_config_env(self):
     """Test that IDAMCP_NO_USER_CONFIG ignores user configuration files."""

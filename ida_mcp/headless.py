@@ -41,6 +41,7 @@ import idaapi
 from ida_mcp.core import ida_thread
 from ida_mcp.server import mcp_server_thread
 from ida_mcp.server import stop_server
+from ida_mcp.tools.execution import clear_persistent_globals
 from shared import load_options
 # fmt: on
 
@@ -163,6 +164,12 @@ def main():
     stop_server(hash_str)
     if server_thread.is_alive():
       server_thread.join(timeout=5.0)
+    # This is the IDA thread; clear the shared idapython_eval namespace (which
+    # may hold SWIG-wrapped IDA objects) while the database is still open.
+    try:
+      clear_persistent_globals()
+    except Exception as e:  # pylint: disable=broad-exception-caught
+      logger.exception("Error clearing idapython_eval globals: %s", e)
     try:
       idapro.close_database()
     except Exception as e:  # pylint: disable=broad-exception-caught

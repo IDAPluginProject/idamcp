@@ -245,6 +245,8 @@ example of all available settings (showing defaults):
   "disabled_tools": [],
   "flush_after_write": false,
   "gui_undo_points": false,
+  "autostart": false,
+  "hotkey": "Ctrl-Alt-M",
   "tool_mode": "hybrid",
   "always_visible_tools": [
     "list_available_databases",
@@ -297,6 +299,20 @@ example of all available settings (showing defaults):
     labeled `MCP: <tool name>` before each tool call that modifies the database,
     so each agent change can be reverted with `Ctrl + Z` / Edit -> Undo. Not
     used in headless mode. Defaults to `False`.
+*   **autostart**: If `True`, the IDA plugin starts the MCP server by itself
+    when IDA opens a database, so you don't need Edit -> Plugins -> MCP or the
+    hotkey. If auto-analysis is still running, the server starts when it
+    finishes, without blocking the UI; until then, the hotkey only reports that
+    the server is on its way. If auto-analysis is disabled, the server starts
+    without it. Works in the GUI and in text-mode IDA (`idat` before IDA 9.2).
+    Skipped in batch mode: with `-A` or `-B` (e.g. `ida -A -S script.py`), and
+    in any `idat` since IDA 9.2, which has no interactive mode. No effect in
+    headless mode (idalib). Defaults to `False`.
+*   **hotkey**: The IDA plugin's shortcut for starting the server, in IDA's
+    hotkey syntax (e.g. `"Ctrl-Shift-M"`). An empty string means no shortcut;
+    Edit -> Plugins -> MCP still works. IDA reads it when it loads the plugin,
+    so a change applies to the next database you open. Defaults to
+    `"Ctrl-Alt-M"`.
 *   **tool_mode**: Controls how the Gateway exposes MCP tools to the client.
     Supported values are `"hybrid"` (default), `"full"`, and `"code_mode"`:
     *   `"hybrid"`: Uses FastMCP's `BM25SearchTransform` to keep core
@@ -332,6 +348,9 @@ example of all available settings (showing defaults):
     points freshness verification before querying the `entries` table.
 *   **GUI_UNDO_POINTS**: Set to `true`, `1`, or `yes` to enable
     `gui_undo_points`.
+*   **AUTOSTART**: Set to `true`, `1`, or `yes` to enable `autostart`; any
+    other value disables it.
+*   **HOTKEY**: Overrides `hotkey`; an empty value means no shortcut.
 *   **ENABLE_ALL_UNSAFE_TOOLS**: Set to `true` to enable all unsafe tools.
 *   **ENABLED_UNSAFE_TOOLS**: A comma-separated list of specific unsafe tools to
     enable (e.g., `idapython_eval,dbg_step_over`).
@@ -378,7 +397,8 @@ ENABLED_UNSAFE_TOOLS=idapython_eval,dbg_step_over <gemini/headless/ida>
 ### GUI Mode (Interactive)
 
 1.  **Start IDA Pro** and open a database/binary.
-2.  Press **`Ctrl + Alt + M`** to start the MCP server within IDA.
+2.  Press **`Ctrl + Alt + M`** (the `hotkey` option) to start the MCP server
+    within IDA, or set `"autostart": true` to have it start by itself.
 3.  The Gateway will automatically discover this new session, and you can begin
     your analysis with the AI agent.
 
@@ -449,6 +469,10 @@ originally based on and inspired by the
 [`ida-pro-mcp`](https://github.com/mrexodia/ida-pro-mcp) project by Duncan
 Ogilvie.
 
+Some code, mainly in `idapython_eval` and in tool cancellation and timeouts, is
+adapted from the [`ida-nexus`](https://github.com/HexRaysSA/ida-nexus) project
+by Hex-Rays SA.
+
 Special thanks to Hua Wu and Geoff Alexander for their thorough code reviews,
 and to Genwei Jiang and Andriy Brukhovetskyy (doomedraven) for invaluable
 feedback.
@@ -462,4 +486,5 @@ for the
 ## License
 
 This project is licensed under the [MIT License](LICENSE) and is based on the
-`ida-pro-mcp` project by Duncan Ogilvie.
+`ida-pro-mcp` project by Duncan Ogilvie. Portions are adapted from `ida-nexus`
+by Hex-Rays SA, which is also MIT-licensed.

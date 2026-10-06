@@ -2934,7 +2934,7 @@
           "tags": []
         }
       },
-      "description": "Execute Python code in IDA context.\n\nReturns dict with result/stdout/stderr. Has access to all IDA API modules.\nSupports Jupyter-style evaluation (returns the value of the last expression).\nMaintains persistent state across calls.",
+      "description": "Execute Python code in IDA context.\n\nReturns dict with result/stdout/stderr. Has access to all IDA API modules.\nSupports Jupyter-style evaluation (returns the value of the last expression).\nEach call runs in a fresh namespace unless persist_globals is set; objects\nthat must outlive the call (hooks, timers, callbacks) need persist_globals.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -2945,6 +2945,16 @@
           "database_id": {
             "description": "The unique identifier for the target IDA database. You can obtain this ID by calling list_available_databases, reading the ida://databases resource, or by opening a new database via idalib_headless_open.",
             "type": "string"
+          },
+          "persist_globals": {
+            "default": false,
+            "description": "If true, the code runs in one namespace shared by all callers, so variables, functions, and imports persist across calls and are visible to every agent. If false, the code runs in a fresh namespace that is discarded after the call.",
+            "type": "boolean"
+          },
+          "timeout": {
+            "default": 360.0,
+            "description": "Maximum time in seconds the code may run. Code that runs longer is interrupted, and the call fails with a timeout error that includes the output printed so far. Time spent waiting for other tool calls to finish does not count.",
+            "type": "number"
           }
         },
         "required": [

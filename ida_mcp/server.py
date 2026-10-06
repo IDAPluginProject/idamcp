@@ -36,6 +36,7 @@ root_dir = pathlib.Path(__file__).resolve().parent.parent
 sys.path = [str(root_dir)] + [p for p in sys.path if p != str(root_dir)]
 
 import asyncio
+from shared.rpc import DEFAULT_SHUTDOWN_GRACE
 from shared.rpc import RPCServer
 from ida_mcp.core.backend_registry import RegistryManager
 from ida_mcp.core.rpc_registry import rpc_registry
@@ -144,8 +145,17 @@ def _print_metadata(metadata: Metadata, identifier: str) -> None:
       sys.stderr = Unbuffered(log_file)
 
 
-def mcp_server_thread(identifier: str):
-  """Start the MCP server thread."""
+def mcp_server_thread(
+    identifier: str, shutdown_grace: float = DEFAULT_SHUTDOWN_GRACE
+):
+  """Start the MCP server thread.
+
+  Args:
+    identifier: Names the server in the registry, its Unix socket, and
+      stop_server() calls.
+    shutdown_grace: How long the server waits at shutdown, in seconds, for
+      cancelled tool calls to finish before it cancels them again.
+  """
   config = load_config()
   security_manager.load_defaults(config)
   security_manager.load_from_netnode()
@@ -212,7 +222,7 @@ def mcp_server_thread(identifier: str):
       _running_servers[identifier] = (loop, stop_event)
 
     try:
-      server = RPCServer(methods)
+      server = RPCServer(methods, shutdown_grace=shutdown_grace)
       if channel == "tcp":
         srv = await server.start_tcp("127.0.0.1", 0)
         port = srv.sockets[0].getsockname()[1]

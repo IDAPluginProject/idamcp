@@ -60,6 +60,8 @@ _DEFAULT_CONFIG = {
     "disabled_tools": [],
     "flush_after_write": False,
     "gui_undo_points": False,
+    "autostart": False,
+    "hotkey": "Ctrl-Alt-M",
     "tool_mode": "hybrid",  # "full" | "hybrid" | "code_mode"
     "always_visible_tools": _DEFAULT_ALWAYS_VISIBLE_TOOLS,
 }
@@ -188,6 +190,8 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
   _set_option_from_env(config, "check_entries_freshness")
   _set_option_from_env(config, "flush_after_write")
   _set_option_from_env(config, "gui_undo_points")
+  _set_option_from_env(config, "autostart")
+  _set_option_from_env(config, "hotkey")
   _set_option_from_env(config, "tool_mode")
   _set_option_from_env(config, "always_visible_tools")
 

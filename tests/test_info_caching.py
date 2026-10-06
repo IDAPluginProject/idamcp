@@ -27,6 +27,7 @@ from unittest import mock
 
 # Mock IDA modules
 MOCKED_MODULES = [
+    "ida_auto",
     "ida_bytes",
     "ida_idp",
     "ida_funcs",

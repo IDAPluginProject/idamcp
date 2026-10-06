@@ -32,6 +32,7 @@ import logging
 import queue
 import threading
 from typing import Any, Callable
+from ida_mcp.core.decorators import get_cancellation_token
 import idaapi
 
 logger = logging.getLogger(__name__)
@@ -64,13 +65,33 @@ class IDATask:
     self.future = future
     self.event = event
     self.error: BaseException | None = None
+    self._lock = threading.Lock()
+    self._started = False
+    self._aborted = False
+
+  def abort_if_queued(self, exc: BaseException | None = None) -> bool:
+    """Aborts the task immediately if it has not yet started on the IDA thread."""
+    with self._lock:
+      if self._started or self._aborted:
+        return False
+      self._aborted = True
+    err = exc or asyncio.CancelledError("Tool cancelled before execution")
+    self.error = err
+    if self.loop and self.future:
+      self.loop.call_soon_threadsafe(_safe_set_exception, self.future, err)
+    if self.event is not None:
+      self.event.set()
+    return True
 
   def __call__(self):
     # pylint: disable=broad-exception-caught
-    if self.future and self.future.cancelled():
-      if self.event is not None:
-        self.event.set()
-      return
+    with self._lock:
+      if self._aborted or (self.future and self.future.cancelled()):
+        self._aborted = True
+        if self.event is not None:
+          self.event.set()
+        return
+      self._started = True
 
     try:
       res = self.func()
@@ -85,6 +106,8 @@ class IDATask:
         self.event.set()
 
   def cancel(self):
+    with self._lock:
+      self._aborted = True
     err = RuntimeError("IDA worker thread loop stopped.")
     self.error = err
     if self.loop and self.future:
@@ -164,8 +187,17 @@ def execute_sync(
     raise RuntimeError("IDA worker thread loop is not running.")
   event = threading.Event()
   task = IDATask(func, event=event)
-  _ida_queue.put(task)
-  event.wait()
+  token = get_cancellation_token()
+  unregister = (
+      token.register_callback(task.abort_if_queued)
+      if token is not None
+      else (lambda: None)
+  )
+  try:
+    _ida_queue.put(task)
+    event.wait()
+  finally:
+    unregister()
   if task.error:
     raise task.error
 
@@ -194,5 +226,14 @@ async def execute_async(
   loop = asyncio.get_running_loop()
   future = loop.create_future()
   task = IDATask(func, loop=loop, future=future)
-  _ida_queue.put(task)
-  return await future
+  token = get_cancellation_token()
+  unregister = (
+      token.register_callback(task.abort_if_queued)
+      if token is not None
+      else (lambda: None)
+  )
+  try:
+    _ida_queue.put(task)
+    return await future
+  finally:
+    unregister()

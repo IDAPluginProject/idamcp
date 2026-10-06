@@ -166,7 +166,7 @@ def get_metadata() -> Metadata:
       filetype=_get_file_type_desc(),
       bitness=idaapi.inf_get_app_bitness(),
       procname=idaapi.inf_get_procname() or "<unknown>",
-      is_headless=not idaapi.is_idaq(),
+      is_headless=bool(getattr(idaapi, "is_headless", False)),
   )
 
 

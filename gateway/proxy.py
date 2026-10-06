@@ -1066,12 +1066,27 @@ async def idapython_eval(
         " resource, or by opening a new database via idalib_headless_open.",
     ],
     code: Annotated[str, "Python code to execute"],
+    persist_globals: Annotated[
+        bool,
+        "If true, the code runs in one namespace shared by all callers, so"
+        " variables, functions, and imports persist across calls and are"
+        " visible to every agent. If false, the code runs in a fresh namespace"
+        " that is discarded after the call.",
+    ] = False,
+    timeout: Annotated[
+        float,
+        "Maximum time in seconds the code may run. Code that runs longer is"
+        " interrupted, and the call fails with a timeout error that includes"
+        " the output printed so far. Time spent waiting for other tool calls to"
+        " finish does not count.",
+    ] = 360.0,
 ) -> Dict[str, Any]:
   """Execute Python code in IDA context.
 
   Returns dict with result/stdout/stderr. Has access to all IDA API modules.
   Supports Jupyter-style evaluation (returns the value of the last expression).
-  Maintains persistent state across calls.
+  Each call runs in a fresh namespace unless persist_globals is set; objects
+  that must outlive the call (hooks, timers, callbacks) need persist_globals.
   """
   return await forward_to(database_id, "idapython_eval", locals())
 

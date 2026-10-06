@@ -386,10 +386,12 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
         self.verify_safe_eval_via_patch_assembly,
         self.verify_timeout_busy_handling,
         self.verify_timeout_gil_starvation_handling,
+        self.verify_idapython_eval_timeout,
         self.verify_xrefs_offset_issue,
         self.verify_db_versioning_and_migration,
         self.verify_lock_reentrancy_no_deadlock,
         self.verify_sql_query_cancellation_and_recovery,
+        self.verify_eval_cancellation_tight_loop,
     ]
 
     errors = []
@@ -592,7 +594,9 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
         " opt.display_only_existing_strings,\n    'ignore_heads':"
         " opt.ignore_heads,\n}\nidautils.Strings(default_setup=True)\n"
     )
-    await self.run_tool("idapython_eval", code=save_code)
+    await self.run_tool(
+        "idapython_eval", code=save_code, persist_globals=True
+    )
 
     try:
       # Load golden data
@@ -654,7 +658,9 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
           "    opt.ignore_heads = _saved_strlist_opt['ignore_heads']\n"
           "    ida_strlist.build_strlist()\n"
       )
-      await self.run_tool("idapython_eval", code=restore_code)
+      await self.run_tool(
+          "idapython_eval", code=restore_code, persist_globals=True
+      )
 
   async def verify_get_operand(self):
     # Load golden data
@@ -3363,6 +3369,31 @@ load_config()["check_entries_freshness"] = False
     meta_resp = await self.run_tool("get_metadata")
     self.assertIn("sha256", meta_resp)
 
+  async def verify_idapython_eval_timeout(self):
+    """Verifies idapython_eval interrupts code that outlives its timeout."""
+    start_time = time.time()
+    with self.assertRaises(RuntimeError) as ctx:
+      await self.run_tool(
+          "idapython_eval",
+          code="print('started')\nwhile True:\n    pass",
+          timeout=1,
+      )
+    duration = time.time() - start_time
+    print(f"idapython_eval timed out after {duration:.2f}s")
+    # A tool error, not an internal error ("Backend tool error: ..."), that
+    # ends with the output printed before the timeout.
+    self.assertEqual(
+        str(ctx.exception),
+        "Tool idapython_eval failed: Operation timed out after 1.00s\n\n"
+        "stdout:\nstarted",
+    )
+    self.assertGreaterEqual(duration, 1.0)
+    self.assertLess(duration, 10.0)
+
+    # IDA's main thread is free again.
+    eval_res = await self.run_tool("idapython_eval", code="6 * 7")
+    self.assertEqual(eval_res["result"], "42")
+
   async def verify_xrefs_offset_issue(self):
     """Verifies that SELECT * FROM xrefs returns absolute addresses when image base is non-zero."""
     # Rebase the program by 0x400000
@@ -3810,6 +3841,62 @@ with q._db_write_lock:
     # Verify that other tools still function cleanly
     meta = await self.run_tool("get_metadata")
     self.assertIn("sha256", meta)
+
+  async def verify_eval_cancellation_tight_loop(self):
+    """Verifies that cancelling idapython_eval stops code that resists it.
+
+    The loops make no calls that could check for cancellation, so only the
+    interrupt that the cancel injects from another thread can stop them.
+    CPython raises it where a loop jumps back to its start, here inside the
+    `try`, whose `except BaseException` would swallow it, but for the handler
+    that idapython_eval prepends to every `try` in user code. If either fails,
+    IDA's main thread stays busy and other tool calls can't run.
+    """
+    # With a single loop, the interrupt would be raised at its jump back,
+    # outside the `try`, and the test wouldn't cover the handler.
+    code = (
+        "x = 0\n"
+        "while True:\n"
+        "  try:\n"
+        "    while True:\n"
+        "      x += 1\n"
+        "  except BaseException:\n"
+        "    pass\n"
+    )
+    eval_task = asyncio.create_task(self.run_tool("idapython_eval", code=code))
+    # Let the call reach IDA's main thread.
+    await asyncio.sleep(1.0)
+
+    # As in verify_sql_query_cancellation_and_recovery, the client doesn't
+    # send a CancelledNotification when the task is cancelled.
+    req_id = _get_in_flight_request_id(self.session)
+    self.assertIsNotNone(req_id, "idapython_eval is not in flight")
+    assert self.session is not None
+    await self.session.send_notification(
+        mcp.types.CancelledNotification(
+            params=mcp.types.CancelledNotificationParams(  # type: ignore[call-arg]
+                requestId=req_id,  # type: ignore[call-arg]
+                reason="Test cancellation",
+            )
+        )
+    )
+    eval_task.cancel()
+    try:
+      await eval_task
+    except (asyncio.CancelledError, Exception) as e:  # pylint: disable=broad-exception-caught
+      print(f"DEBUG: Cancelled eval response: {e!r}")
+
+    start_time = time.time()
+    try:
+      meta = await asyncio.wait_for(self.run_tool("get_metadata"), timeout=10.0)
+    except asyncio.TimeoutError:
+      self.fail("IDA's main thread is still busy: the loop wasn't interrupted")
+    print(f"IDA's main thread was free after {time.time() - start_time:.2f}s")
+    self.assertIn("sha256", meta)
+
+    # No interrupt is left over to hit the next call.
+    eval_res = await self.run_tool("idapython_eval", code="6 * 7")
+    self.assertEqual(eval_res["result"], "42")
 
 
 if __name__ == "__main__":

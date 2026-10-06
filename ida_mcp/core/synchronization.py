@@ -1,5 +1,6 @@
 # Copyright (c) 2026 Google LLC
 # Copyright (c) 2025 Duncan Ogilvie
+# Copyright (c) 2026 Hex-Rays SA
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,11 +23,15 @@
 """Module for synchronizing with the IDA main thread."""
 
 import asyncio
+import contextlib
 import enum
 import functools
+import inspect
 import logging
+import math
 from typing import Any, Callable
 
+import ida_auto
 import ida_kernwin
 from ida_mcp.core import ida_thread
 from ida_mcp.core.decorators import cancellation_profile
@@ -121,7 +126,12 @@ def _create_undo_point(tool_name: str) -> None:
 class _IDACall:
   """Helper to execute a callable on IDA's main thread with safety and cancellation checks."""
 
-  def __init__(self, ff: Callable[[], Any], safety_mode: IDASafety):
+  def __init__(
+      self,
+      ff: Callable[[], Any],
+      safety_mode: IDASafety,
+      timeout: float | None = None,
+  ):
     if safety_mode not in (IDASafety.SAFE_READ, IDASafety.SAFE_WRITE):
       error_str = "Invalid safety mode {} over function {}".format(
           safety_mode, ff.__name__
@@ -135,6 +145,7 @@ class _IDACall:
 
     self.ff = ff
     self.safety_mode = safety_mode
+    self.timeout = timeout
     self.token = token
     self.success = False
     self.result: Any = IDASyncError(
@@ -151,18 +162,36 @@ class _IDACall:
     if self.safety_mode == IDASafety.SAFE_WRITE:
       _create_undo_point(getattr(self.ff, "__name__", "tool"))
 
+    old_ida_state = None
+    if not getattr(idaapi, "is_headless", False):
+      with contextlib.suppress(Exception):
+        # IDA 9.4 GUI database saves while autoanalysis is disabled can leave
+        # IDA's kernel status at st_Work, blocking subsequent MFF_WRITE calls.
+        # Adapted from ida-nexus: IDARuntime._run_sync in
+        # ida_nexus/_runtime.py.
+        old_ida_state = ida_auto.set_ida_state(ida_auto.st_Work)
+
     old_batch = idc.batch(1)
+    ida_kernwin.clr_cancelled()
     try:
-      with cancellation_profile(self.token):
+      # The time limit starts now, so time spent waiting for IDA's main thread
+      # does not count.
+      with cancellation_profile(
+          self.token, native_ida_cancel=True, timeout=self.timeout
+      ):
         self.result = self.ff()
         self.success = True
     except BaseException as e:
       self.success = False
       self.result = e
     finally:
+      ida_kernwin.clr_cancelled()
       if self.safety_mode == IDASafety.SAFE_WRITE:
         _flush_after_write()
       idc.batch(old_batch)
+      if old_ida_state is not None:
+        with contextlib.suppress(Exception):
+          ida_auto.set_ida_state(old_ida_state)
 
   def run_in_main(self) -> Any:
     old_batch = idc.batch(1)
@@ -202,37 +231,121 @@ class _IDACall:
     return self.get_result()
 
 
-def sync_wrapper(ff: Callable[[], Any], safety_mode: IDASafety) -> Any:
-  """Call a function ff with a specific IDA safety_mode synchronously."""
-  return _IDACall(ff, safety_mode).execute_sync()
+def sync_wrapper(
+    ff: Callable[[], Any],
+    safety_mode: IDASafety,
+    timeout: float | None = None,
+) -> Any:
+  """Call a function ff with a specific IDA safety_mode synchronously.
+
+  Args:
+    ff: The function to call on IDA's main thread.
+    safety_mode: How ff accesses the database.
+    timeout: Seconds ff may run on IDA's main thread before it is interrupted
+      with ToolTimeoutError, or None for no limit.
+  """
+  return _IDACall(ff, safety_mode, timeout).execute_sync()
 
 
-async def async_wrapper(ff: Callable[[], Any], safety_mode: IDASafety) -> Any:
-  """Call a function ff with a specific IDA safety_mode asynchronously."""
-  return await _IDACall(ff, safety_mode).execute_async()
+async def async_wrapper(
+    ff: Callable[[], Any],
+    safety_mode: IDASafety,
+    timeout: float | None = None,
+) -> Any:
+  """Call a function ff with a specific IDA safety_mode asynchronously.
+
+  Args:
+    ff: The function to call on IDA's main thread.
+    safety_mode: How ff accesses the database.
+    timeout: Seconds ff may run on IDA's main thread before it is interrupted
+      with ToolTimeoutError, or None for no limit.
+  """
+  return await _IDACall(ff, safety_mode, timeout).execute_async()
+
+
+# The parameter through which an @idaread/@idawrite function takes its time
+# limit.
+_TIMEOUT_PARAMETER = "timeout"
+
+
+def _validate_timeout(value: Any) -> float | None:
+  """Returns a `timeout` argument as seconds, or None for no limit.
+
+  Args:
+    value: The argument.
+
+  Raises:
+    ValueError: If the argument is neither None nor a positive, finite number.
+  """
+  if value is None:
+    return None
+  if (
+      isinstance(value, bool)
+      or not isinstance(value, (int, float))
+      or not math.isfinite(value)
+      or value <= 0
+  ):
+    raise ValueError(
+        f"timeout must be a positive, finite number of seconds, got {value!r}"
+    )
+  return float(value)
 
 
 def _idasync(f: Callable[..., Any], mode: IDASafety) -> Callable[..., Any]:
-  """Wraps a callable to execute inside the IDA main thread."""
+  """Wraps a callable to execute inside the IDA main thread.
+
+  If `f` has a `timeout` parameter, its argument, or else its default, limits
+  how long a call may run: once it has run that many seconds on IDA's main
+  thread, it is interrupted and raises ToolTimeoutError, which the client gets
+  as a tool error. Time spent waiting for the main thread does not count, and
+  None means no limit. A call made on the main thread itself, e.g., by another
+  tool, runs inline under the caller's limit.
+
+  Args:
+    f: The function to wrap.
+    mode: How `f` accesses the database.
+
+  Returns:
+    The wrapper, which returns a coroutine when called with an event loop
+    running, and the result otherwise. Its `sync_call` always returns the
+    result.
+  """
+  signature = inspect.signature(f)
+  timeout_parameter = signature.parameters.get(_TIMEOUT_PARAMETER)
+  has_timeout = timeout_parameter is not None and timeout_parameter.kind not in (
+      inspect.Parameter.VAR_POSITIONAL,
+      inspect.Parameter.VAR_KEYWORD,
+  )
+
+  def bind(args, kwargs) -> tuple[Callable[[], Any], float | None]:
+    """Returns the call of `f` with the arguments, and its time limit."""
+    timeout = None
+    if has_timeout:
+      # Binding finds the argument whether it is passed by position or by
+      # keyword, or left to its default.
+      bound = signature.bind(*args, **kwargs)
+      bound.apply_defaults()
+      timeout = _validate_timeout(bound.arguments[_TIMEOUT_PARAMETER])
+    ff = functools.partial(f, *args, **kwargs)
+    ff.__name__ = f.__name__  # type: ignore
+    return ff, timeout
 
   @functools.wraps(f)
   def wrapper(*args, **kwargs) -> Any:
-    ff = functools.partial(f, *args, **kwargs)
-    ff.__name__ = f.__name__  # type: ignore
+    ff, timeout = bind(args, kwargs)
     try:
       loop = asyncio.get_running_loop()
     except RuntimeError:
       loop = None
 
     if loop is not None and loop.is_running():
-      return async_wrapper(ff, mode)
-    return sync_wrapper(ff, mode)
+      return async_wrapper(ff, mode, timeout)
+    return sync_wrapper(ff, mode, timeout)
 
   @functools.wraps(f)
   def sync_call(*args, **kwargs) -> Any:
-    ff = functools.partial(f, *args, **kwargs)
-    ff.__name__ = f.__name__  # type: ignore
-    return sync_wrapper(ff, mode)
+    ff, timeout = bind(args, kwargs)
+    return sync_wrapper(ff, mode, timeout)
 
   # Python 3.14 compatibility: manually copy annotations and signature
   wrapper.__annotations__ = getattr(f, "__annotations__", {})

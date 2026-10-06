@@ -73,8 +73,12 @@ def get_security_config() -> Dict[str, Any]:
 
 @internal
 @jsonrpc
-def close_database() -> None:
+async def close_database() -> None:
   """Closes the current database gracefully and exits the headless instance."""
+  # Async, so that it runs on the RPC server's event loop: the server writes the
+  # reply in the same loop step, before it can process the stop_server() call
+  # that stop() leads to on the IDA thread. A sync function would run on an
+  # executor thread, and the server could close the connection first.
   logging.getLogger("ida_mcp.tools.config").info(
       "Received close_database RPC call. Stopping loop..."
   )

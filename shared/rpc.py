@@ -81,16 +81,54 @@ def set_keepalive(sock):
     logger.warning("Failed to set keepalive: %s", e)
 
 
+# How long RPCServer.close() waits by default, in seconds, for cancelled tasks
+# to finish.
+DEFAULT_SHUTDOWN_GRACE = 2.0
+
+
 class RPCServer:
   """Simple JSON-RPC server."""
 
-  def __init__(self, methods: Dict[str, Callable]):
+  def __init__(
+      self,
+      methods: Dict[str, Callable],
+      shutdown_grace: float = DEFAULT_SHUTDOWN_GRACE,
+  ):
     self.methods = methods
+    # How long close() waits, in seconds, for cancelled tasks to finish before
+    # it cancels them again.
+    self.shutdown_grace = shutdown_grace
     self.active_connections = set()
     self.running_tasks: Dict[
         asyncio.WriteTransport, Dict[Any, asyncio.Task]
     ] = {}
     self._server = None
+    # Every unfinished request task, including those whose connection has
+    # closed, so that close() can wait for them.
+    self._tasks: set[asyncio.Task] = set()
+    # The tasks in _tasks that this server has cancelled.
+    self._cancelled: set[asyncio.Task] = set()
+
+  def _cancel(self, task: asyncio.Task) -> None:
+    """Cancels a task, unless this server has cancelled it already.
+
+    A cancelled task may take a while to finish: ida_mcp's @jsonrpc keeps
+    interrupting the call's worker thread until the worker stops. Another
+    cancel would end that wait early and leave the worker running.
+
+    The record is kept here rather than read from Task.cancelling(), which
+    also counts the cancels that asyncio.timeout(), wait_for() and TaskGroup
+    make inside the task; a client's cancel during their cleanup would then
+    be skipped.
+    """
+    if task not in self._cancelled:
+      self._cancelled.add(task)
+      task.cancel()
+
+  def _forget(self, task: asyncio.Task) -> None:
+    """Stops tracking a finished task."""
+    self._tasks.discard(task)
+    self._cancelled.discard(task)
 
   async def handle_connection(
       self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -126,7 +164,7 @@ class RPCServer:
         self.active_connections.remove(transport)
       tasks = self.running_tasks.pop(transport, {})
       for task in tasks.values():
-        task.cancel()
+        self._cancel(task)
       writer.close()
       try:
         await writer.wait_closed()
@@ -145,7 +183,7 @@ class RPCServer:
         task = self.running_tasks[transport].get(target_id)
         if task:
           logger.info("Cancelling task %s", target_id)
-          task.cancel()
+          self._cancel(task)
       return
 
     if method == "ping":
@@ -173,6 +211,8 @@ class RPCServer:
         self.execute_method(req_id, method, params, writer)
     )
     self.running_tasks[transport][req_id] = task
+    self._tasks.add(task)
+    task.add_done_callback(self._forget)
     task.add_done_callback(
         lambda _: self.running_tasks[transport].pop(req_id, None)
         if transport in self.running_tasks
@@ -255,12 +295,11 @@ class RPCServer:
     if self._server:
       self._server.close()
 
-      # Collect and cancel all tasks before connection handlers remove them
-      all_tasks = []
-      for transport_tasks in self.running_tasks.values():
-        all_tasks.extend(transport_tasks.values())
+      # Cancel all tasks, including those whose connection has closed but
+      # that are still finishing.
+      all_tasks = list(self._tasks)
       for task in all_tasks:
-        task.cancel()
+        self._cancel(task)
 
       # Close all active connections so their handlers can exit
       for transport in list(self.active_connections):
@@ -269,6 +308,11 @@ class RPCServer:
       await self._server.wait_closed()
 
       if all_tasks:
+        # Give the tasks time to finish, then cancel the rest again: a second
+        # cancel makes @jsonrpc return without waiting for its worker.
+        _, pending = await asyncio.wait(all_tasks, timeout=self.shutdown_grace)
+        for task in pending:
+          task.cancel()
         await asyncio.gather(*all_tasks, return_exceptions=True)
 
 

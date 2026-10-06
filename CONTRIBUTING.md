@@ -35,7 +35,7 @@ project architecture and pass our existing tests:
     tests and ensure your changes do not introduce regressions. If you modify
     core tool definitions or proxy routing, run `make build`.
 2.  **Code Style**: Ensure Python code adheres to PEP 8 standards, uses type
-    annotations (compatible with Python 3.10+), and includes descriptive
+    annotations (compatible with Python 3.11+), and includes descriptive
     docstrings.
 3.  **Pull Requests**: Open a GitHub Pull Request with a clear summary of what
     your change does and any relevant context or testing steps.
