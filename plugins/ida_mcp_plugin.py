@@ -218,8 +218,8 @@ class MCP(idaapi.plugin_t):
         daemon=True,
     )
 
-    self._server_started = True
     self.server_thread.start()
+    self._server_started = True
 
   def term(self):
     self._stop_autostart()
@@ -227,13 +227,13 @@ class MCP(idaapi.plugin_t):
       return
 
     # 1. Stop the MCP server and join the server thread
-    if getattr(self, "hash_str", None):
+    if self.hash_str:
       try:
         stop_server(self.hash_str)
       except Exception as e:
         print(f"[MCP] Error stopping server: {e}")
 
-    if getattr(self, "server_thread", None) is not None:
+    if self.server_thread is not None:
       self.server_thread.join(timeout=5.0)
       self.server_thread = None
 
@@ -273,7 +273,7 @@ class MCP(idaapi.plugin_t):
       try:
         delattr(idaapi, "idb_path")
       except Exception:
-        idaapi.idb_path = None
+        idaapi.idb_path = None  # type: ignore
 
     self.hash_str = None
     self._server_started = False
