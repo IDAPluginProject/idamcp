@@ -32,6 +32,7 @@ MOCKED_MODULES = [
     "ida_auto",
     "ida_bytes",
     "ida_dbg",
+    "ida_domain",
     "ida_idp",
     "ida_entry",
     "ida_frame",

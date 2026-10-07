@@ -239,6 +239,7 @@ def _get_base_globals() -> Dict[str, Any]:
         "ida_dbg",
         "ida_dirtree",
         "ida_diskio",
+        "ida_domain",
         "ida_entry",
         "ida_expr",
         "ida_fixup",
