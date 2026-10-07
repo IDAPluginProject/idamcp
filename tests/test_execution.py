@@ -218,6 +218,25 @@ Later()
     self.assertEqual(res["stderr"], "")
     self.assertEqual(res["result"], "7")
 
+  def test_result_type_reported(self):
+    """Test that result_type names the type of the value."""
+    cases = {
+        "42": "int",
+        "'42'": "str",
+        "import collections\ncollections.OrderedDict()": (
+            "collections.OrderedDict"
+        ),
+        "class Point:\n    pass\nPoint()": "Point",
+        # A class made by type() here has no __module__.
+        "type('Dyn', (), {})()": "Dyn",
+        "x = 1": "",
+    }
+    for code, expected in cases.items():
+      with self.subTest(code=code):
+        res = idapython_eval(code)
+        self.assertEqual(res["stderr"], "")
+        self.assertEqual(res["result_type"], expected)
+
   def test_system_exit_caught_cleanly(self):
     """Test that sys.exit() is caught and reported in stderr instead of killing the process."""
     res = idapython_eval("import sys\nprint('before exit')\nsys.exit(7)")

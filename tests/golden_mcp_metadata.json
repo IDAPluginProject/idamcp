@@ -2934,7 +2934,7 @@
           "tags": []
         }
       },
-      "description": "Execute Python code in IDA context.\n\nReturns dict with result/stdout/stderr. Has access to all IDA API modules.\nSupports Jupyter-style evaluation (returns the value of the last expression).\nEach call runs in a fresh namespace unless persist_globals is set; objects\nthat must outlive the call (hooks, timers, callbacks) need persist_globals.",
+      "description": "Execute Python code in IDA context.\n\nReturns dict with result/result_type/stdout/stderr: result is str() of the\nvalue, and result_type its type, e.g. \"int\" or \"ida_funcs.func_t\" (both are\nempty if the value is None). Has access to all IDA API modules.\nSupports Jupyter-style evaluation (returns the value of the last expression).\nEach call runs in a fresh namespace unless persist_globals is set; objects\nthat must outlive the call (hooks, timers, callbacks) need persist_globals.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {

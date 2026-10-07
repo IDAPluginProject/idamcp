@@ -1083,7 +1083,9 @@ async def idapython_eval(
 ) -> Dict[str, Any]:
   """Execute Python code in IDA context.
 
-  Returns dict with result/stdout/stderr. Has access to all IDA API modules.
+  Returns dict with result/result_type/stdout/stderr: result is str() of the
+  value, and result_type its type, e.g. "int" or "ida_funcs.func_t" (both are
+  empty if the value is None). Has access to all IDA API modules.
   Supports Jupyter-style evaluation (returns the value of the last expression).
   Each call runs in a fresh namespace unless persist_globals is set; objects
   that must outlive the call (hooks, timers, callbacks) need persist_globals.

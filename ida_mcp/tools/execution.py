@@ -120,6 +120,17 @@ async def _await(value: Awaitable[Any]) -> Any:
   return await value
 
 
+def _type_name(value: Any) -> str:
+  """Returns the type name of `value`, e.g. "int" or "ida_funcs.func_t"."""
+  value_type = type(value)
+  # A class that a snippet creates with type() has no __module__, because the
+  # namespace has no __name__ (see _get_base_globals).
+  module = getattr(value_type, "__module__", None)
+  if module in (None, "builtins"):
+    return value_type.__qualname__
+  return f"{module}.{value_type.__qualname__}"
+
+
 # Adapted from ida-nexus: _invoke_callable in ida_nexus/_runtime.py.
 def _invoke_callable(
     function: Callable[..., Any],
@@ -347,7 +358,9 @@ def idapython_eval(
 ) -> Dict[str, Any]:
   """Execute Python code in IDA context.
 
-  Returns dict with result/stdout/stderr. Has access to all IDA API modules.
+  Returns dict with result/result_type/stdout/stderr: result is str() of the
+  value, and result_type its type, e.g. "int" or "ida_funcs.func_t" (both are
+  empty if the value is None). Has access to all IDA API modules.
   Supports Jupyter-style evaluation (returns the value of the last expression).
   Each call runs in a fresh namespace unless persist_globals is set; objects
   that must outlive the call (hooks, timers, callbacks) need persist_globals.
@@ -358,6 +371,7 @@ def idapython_eval(
   stdout_capture = io.StringIO()
   stderr_capture = io.StringIO()
   result_text = ""
+  result_type = ""
 
   try:
     try:
@@ -375,8 +389,8 @@ def idapython_eval(
           result_value = asyncio.run(_await(result_value))
         # Stringify before the namespace is cleared, since __str__ may use
         # globals defined by the snippet.
-        if result_value is not None:
-          result_text = str(result_value)
+        result_text = str(result_value)
+        result_type = _type_name(result_value)
     except (Exception, SystemExit) as exc:  # pylint: disable=broad-exception-caught
       # Catch both Exception and SystemExit so `sys.exit()` in user scripts is
       # reported cleanly in stderr instead of terminating the worker/GUI thread.
@@ -402,6 +416,7 @@ def idapython_eval(
 
   return {
       "result": result_text,
+      "result_type": result_type,
       "stdout": stdout_capture.getvalue(),
       "stderr": stderr_capture.getvalue(),
   }
