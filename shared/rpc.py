@@ -326,6 +326,11 @@ class RPCClient:
     self.reader_task = None
     self._closed = False
 
+  @property
+  def is_closed(self) -> bool:
+    """Whether the connection has been closed, by either side."""
+    return self._closed
+
   async def connect_tcp(
       self, host: str, port: int, limit: int = 100 * 1024 * 1024
   ):

@@ -354,12 +354,23 @@ class HeadlessManager:
       db_id = metadata["database_id"]
       # Ensure pid matches what we spawned (for tracking)
       metadata["pid"] = process.pid
+      # An instance of this database that died without cleaning up (crash,
+      # kill -9) can still be registered under the same id. Disconnect it
+      # before registering the new process; otherwise connect_to_backend
+      # disconnects it once the new record arrives, and that cleanup pops and
+      # signals the new process's PID entry.
+      old_client = _global_clients.get(db_id)
+      if old_client is not None and old_client.is_closed:
+        await disconnect_backend(db_id)
       async with _global_client_state[db_id].condition:
         self.register(db_id, process.pid)
     finally:
       self._pending_spawns -= 1
     try:
-      await asyncio.wait_for(_backend_events[db_id].wait(), timeout=15.0)
+      # connect_to_backend sets the event only if it exists, i.e. once this
+      # wait has started; it may have connected to the new instance earlier.
+      if db_id not in _global_clients:
+        await asyncio.wait_for(_backend_events[db_id].wait(), timeout=15.0)
     except asyncio.TimeoutError:
       async with _global_client_state[db_id].condition:
         await self.unregister(db_id)
@@ -520,9 +531,12 @@ async def disconnect_backend(backend_id: str, unregister: bool = True) -> None:
       _global_metadata.pop(backend_id, None)
     try:
       if client:
-        # If it is a headless instance opened by us, request graceful shutdown
-        # first
-        if _global_database_id_to_pid.get(backend_id) is not None:
+        # If it is a headless instance opened by us and still connected,
+        # request graceful shutdown first
+        if (
+            _global_database_id_to_pid.get(backend_id) is not None
+            and not client.is_closed
+        ):
           try:
             logging.info(
                 "[Gateway] Requesting graceful database close for %s",

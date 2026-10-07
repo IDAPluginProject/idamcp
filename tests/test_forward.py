@@ -21,17 +21,25 @@
 """Unit tests for HeadlessManager spawned instances tracking and forwarder."""
 
 import asyncio
+import json
+import pathlib
+import tempfile
 import unittest
 from unittest import mock
 
 from fastmcp.exceptions import ToolError
+from gateway.forward import _backend_events
+from gateway.forward import _background_tasks
 from gateway.forward import _global_client_state
 from gateway.forward import _global_clients
 from gateway.forward import _global_database_id_to_pid
+from gateway.forward import _global_metadata
 from gateway.forward import _headless_manager
+from gateway.forward import connect_to_backend
 from gateway.forward import forward_to
 from gateway.forward import HeadlessManager
 from gateway.forward import idalib_headless_close
+from shared.rpc import RPCServer
 
 
 class TestHeadlessManager(unittest.IsolatedAsyncioTestCase):
@@ -273,3 +281,151 @@ class TestHeadlessManager(unittest.IsolatedAsyncioTestCase):
       shutdown_clients()
       if hasattr(signal, "SIGTERM"):
         mock_signal.assert_called_once_with(signal.SIGTERM, signal.SIG_IGN)
+
+
+_DB = "c0ffee00"
+# Not real processes: the tests mock _is_process_running and
+# _kill_process_gracefully, so nothing is signalled.
+_OLD_PID = 4_999_991
+_NEW_PID = 4_999_993
+
+
+class TestSpawnWithBackends(unittest.IsolatedAsyncioTestCase):
+  """Tests HeadlessManager.spawn() against in-process RPC backends."""
+
+  async def asyncSetUp(self):
+    tmp = tempfile.TemporaryDirectory()
+    self.addCleanup(tmp.cleanup)
+    self.tmp = pathlib.Path(tmp.name)
+    self.target = self.tmp / "target.bin"
+    self.target.write_bytes(b"\0" * 16)
+    self.record = self.tmp / f"{_DB}.json"
+    self.manager = HeadlessManager(max_instances=4)
+    self.alive: set[int] = set()
+    self.servers: list[RPCServer] = []
+    self.kill = mock.AsyncMock(name="_kill_process_gracefully")
+    for patcher in (
+        mock.patch("gateway.forward.REGISTRY_DIR", self.tmp),
+        mock.patch("gateway.forward._headless_manager", self.manager),
+        mock.patch(
+            "gateway.forward._is_process_running", self.alive.__contains__
+        ),
+        mock.patch("gateway.forward._kill_process_gracefully", self.kill),
+    ):
+      patcher.start()
+      self.addCleanup(patcher.stop)
+    self._clear_gateway_state()
+
+  async def asyncTearDown(self):
+    for client in list(_global_clients.values()):
+      await client.close()
+    for server in self.servers:
+      await server.close()
+    await asyncio.gather(*_background_tasks, return_exceptions=True)
+    self._clear_gateway_state()
+
+  def _clear_gateway_state(self):
+    _global_clients.clear()
+    _global_metadata.clear()
+    _global_database_id_to_pid.clear()
+    _global_client_state.clear()
+    _backend_events.clear()
+
+  async def _start_backend(self, name: str, pid: int) -> RPCServer:
+    """Starts a backend whose whoami returns name, and writes its record."""
+    server = RPCServer({"whoami": lambda: name})
+    tcp_server = await server.start_tcp("127.0.0.1", 0)
+    self.servers.append(server)
+    self.alive.add(pid)
+    record = {
+        "pid": pid,
+        "channel": "tcp",
+        "address": tcp_server.sockets[0].getsockname()[1],
+        "name": _DB,
+        "metadata": {"filepath": str(self.target)},
+    }
+    self.record.write_text(json.dumps(record), encoding="utf-8")
+    return server
+
+  async def _start_new_instance(self) -> None:
+    """Starts the new backend, then connects as the watchdog would."""
+    await self._start_backend("new", _NEW_PID)
+    await connect_to_backend(self.record)
+
+  def _patch_exec(self, before_metadata=None):
+    """Patches the process start; the process prints [MCP_JSON] for _DB.
+
+    Args:
+      before_metadata: An optional coroutine function, awaited before spawn()
+        gets the [MCP_JSON] line.
+    """
+    line = f"[MCP_JSON] {json.dumps({'database_id': _DB})}\n".encode()
+
+    async def readline():
+      if before_metadata is not None:
+        await before_metadata()
+      return line
+
+    process = mock.Mock(
+        pid=_NEW_PID, stdout=mock.Mock(readline=readline), stderr=None
+    )
+    return mock.patch(
+        "asyncio.create_subprocess_exec", mock.AsyncMock(return_value=process)
+    )
+
+  async def _assert_new_instance_kept(self):
+    self.kill.assert_not_called()
+    self.assertEqual(_global_database_id_to_pid, {_DB: _NEW_PID})
+    self.assertEqual(self.manager.spawned_instances, {_DB})
+    self.assertEqual(await forward_to(_DB, "whoami", {}), "new")
+
+  async def test_reopen_after_crash_keeps_new_instance(self):
+    """Test reopening a crashed instance without closing it first."""
+    old_server = await self._start_backend("old", _OLD_PID)
+    self.manager.register(_DB, _OLD_PID)
+    await connect_to_backend(self.record)
+    old_client = _global_clients[_DB]
+
+    # The old instance crashes: its connection ends, but its record stays.
+    self.servers.remove(old_server)
+    await old_server.close()
+    self.alive.discard(_OLD_PID)
+    async with asyncio.timeout(5):
+      while not old_client.is_closed:
+        await asyncio.sleep(0.01)
+
+    # As in a real start, the new instance writes its record after it has
+    # printed [MCP_JSON], i.e. after spawn() has registered its PID.
+    register = self.manager.register
+    tasks = []
+
+    def register_then_start(database_id, pid):
+      register(database_id, pid)
+      tasks.append(asyncio.create_task(self._start_new_instance()))
+
+    with (
+        self._patch_exec(),
+        mock.patch.object(
+            self.manager, "register", side_effect=register_then_start
+        ),
+        mock.patch.object(
+            old_client, "call", wraps=old_client.call
+        ) as old_client_call,
+    ):
+      async with asyncio.timeout(5):
+        await self.manager.spawn(str(self.target))
+        await asyncio.gather(*tasks)
+
+    await self._assert_new_instance_kept()
+    # No close_database request goes over the dead connection either.
+    old_client_call.assert_not_called()
+
+  async def test_spawn_connected_before_reading_metadata(self):
+    """Test spawn() when it connects before it reads [MCP_JSON]."""
+    # The gateway's loop was busy while the instance printed [MCP_JSON] and
+    # wrote its record, so connect_to_backend ran first.
+    with self._patch_exec(before_metadata=self._start_new_instance):
+      async with asyncio.timeout(5):
+        await self.manager.spawn(str(self.target))
+
+    await self._assert_new_instance_kept()
