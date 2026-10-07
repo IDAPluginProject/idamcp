@@ -205,6 +205,18 @@ async def main():
 """)
     self.assertEqual(res["result"], "99")
 
+  def test_awaitable_object_result_evaluated(self):
+    """Test that an awaitable that isn't a coroutine is awaited too."""
+    res = idapython_eval("""
+class Later:
+    def __await__(self):
+        yield
+        return 7
+Later()
+""")
+    self.assertEqual(res["stderr"], "")
+    self.assertEqual(res["result"], "7")
+
   def test_system_exit_caught_cleanly(self):
     """Test that sys.exit() is caught and reported in stderr instead of killing the process."""
     res = idapython_eval("import sys\nprint('before exit')\nsys.exit(7)")

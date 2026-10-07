@@ -24,7 +24,7 @@
 
 import ast
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 import contextlib
 import inspect
 import io
@@ -50,15 +50,14 @@ _USER_CODE_FILENAME = "<idapython_eval>"
 # Adapted from ida-nexus: _protect_operation_interrupt in ida_nexus/_runtime.py.
 def _protect_cancellation(module: ast.Module) -> None:
   """Prepend an `except _OperationInterrupt: raise` handler to every user try block."""
-  try_types = (ast.Try, getattr(ast, "TryStar", ()))
   for node in ast.walk(module):
-    if not isinstance(node, try_types) or not node.handlers:
+    if not isinstance(node, (ast.Try, ast.TryStar)) or not node.handlers:
       continue
     anchor = node.handlers[0]
     exc_type = ast.copy_location(
         ast.Name(id=_CANCEL_EXC_NAME, ctx=ast.Load()), anchor.type or anchor
     )
-    if type(node).__name__ == "TryStar":
+    if isinstance(node, ast.TryStar):
       # A bare raise inside `except*` re-raises a synthetic BaseExceptionGroup.
       # Raise a fresh sentinel instance for the outer cancellation handler.
       reraised_interrupt = ast.copy_location(
@@ -110,6 +109,15 @@ def _add_output_notes(error: BaseException, stdout: str, stderr: str) -> None:
   for name, text in (("stdout", stdout), ("stderr", stderr)):
     if text.strip():
       error.add_note(f"{name}:\n{text.rstrip()}")
+
+
+async def _await(value: Awaitable[Any]) -> Any:
+  """Awaits `value`, so that asyncio.run can run awaitables of any kind.
+
+  asyncio.run itself accepts only coroutines, but a snippet may evaluate to a
+  Future or to an object with __await__.
+  """
+  return await value
 
 
 # Adapted from ida-nexus: _invoke_callable in ida_nexus/_runtime.py.
@@ -363,7 +371,7 @@ def idapython_eval(
             filename=_USER_CODE_FILENAME,
         )
         if inspect.isawaitable(result_value):
-          result_value = asyncio.run(result_value)
+          result_value = asyncio.run(_await(result_value))
         # Stringify before the namespace is cleared, since __str__ may use
         # globals defined by the snippet.
         if result_value is not None:
