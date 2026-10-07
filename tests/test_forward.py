@@ -379,21 +379,25 @@ class TestSpawnWithBackends(unittest.IsolatedAsyncioTestCase):
     self.assertEqual(self.manager.spawned_instances, {_DB})
     self.assertEqual(await forward_to(_DB, "whoami", {}), "new")
 
-  async def test_reopen_after_crash_keeps_new_instance(self):
-    """Test reopening a crashed instance without closing it first."""
+  async def _crash_old_instance(self):
+    """Connects an old instance of _DB, then crashes it; returns its client.
+
+    The connection ends, but the record and the gateway state stay.
+    """
     old_server = await self._start_backend("old", _OLD_PID)
     self.manager.register(_DB, _OLD_PID)
     await connect_to_backend(self.record)
     old_client = _global_clients[_DB]
-
-    # The old instance crashes: its connection ends, but its record stays.
     self.servers.remove(old_server)
     await old_server.close()
     self.alive.discard(_OLD_PID)
     async with asyncio.timeout(5):
       while not old_client.is_closed:
         await asyncio.sleep(0.01)
+    return old_client
 
+  async def _reopen(self, path: str) -> None:
+    """Runs spawn(path); the new instance registers after [MCP_JSON]."""
     # As in a real start, the new instance writes its record after it has
     # printed [MCP_JSON], i.e. after spawn() has registered its PID.
     register = self.manager.register
@@ -408,17 +412,40 @@ class TestSpawnWithBackends(unittest.IsolatedAsyncioTestCase):
         mock.patch.object(
             self.manager, "register", side_effect=register_then_start
         ),
-        mock.patch.object(
-            old_client, "call", wraps=old_client.call
-        ) as old_client_call,
     ):
       async with asyncio.timeout(5):
-        await self.manager.spawn(str(self.target))
+        await self.manager.spawn(path)
         await asyncio.gather(*tasks)
+
+  async def test_reopen_after_crash_keeps_new_instance(self):
+    """Test reopening a crashed instance without closing it first."""
+    old_client = await self._crash_old_instance()
+    with mock.patch.object(
+        old_client, "call", wraps=old_client.call
+    ) as old_client_call:
+      await self._reopen(str(self.target))
 
     await self._assert_new_instance_kept()
     # No close_database request goes over the dead connection either.
     old_client_call.assert_not_called()
+
+  async def test_reopen_after_crash_frees_quota(self):
+    """Test that a crashed instance doesn't count against max_instances."""
+    self.manager.max_instances = 1
+    await self._crash_old_instance()
+    await self._reopen(str(self.target))
+    await self._assert_new_instance_kept()
+
+  async def test_reopen_after_crash_by_another_path(self):
+    """Test reopening a crashed instance by a path the records don't name."""
+    link = self.tmp / "link.bin"
+    try:
+      link.symlink_to(self.target)
+    except OSError as e:
+      self.skipTest(f"cannot create a symlink: {e}")
+    await self._crash_old_instance()
+    await self._reopen(str(link))
+    await self._assert_new_instance_kept()
 
   async def test_spawn_connected_before_reading_metadata(self):
     """Test spawn() when it connects before it reads [MCP_JSON]."""

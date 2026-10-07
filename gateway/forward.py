@@ -261,6 +261,12 @@ class HeadlessManager:
               " attempt to open it again; use the existing ID to access it"
               " directly.",
           )
+        client = _global_clients.get(db_id)
+        if client is not None and client.is_closed:
+          # The instance died without cleaning up (crash, kill -9). Drop it
+          # now, so that it doesn't count against max_instances below, and
+          # so that its later cleanup can't pop the new process's PID entry.
+          await disconnect_backend(db_id)
 
     if len(self.spawned_instances) + self._pending_spawns >= self.max_instances:
       raise ToolError(
@@ -354,11 +360,12 @@ class HeadlessManager:
       db_id = metadata["database_id"]
       # Ensure pid matches what we spawned (for tracking)
       metadata["pid"] = process.pid
-      # An instance of this database that died without cleaning up (crash,
-      # kill -9) can still be registered under the same id. Disconnect it
-      # before registering the new process; otherwise connect_to_backend
-      # disconnects it once the new record arrives, and that cleanup pops and
-      # signals the new process's PID entry.
+      # The check above may have missed a dead instance of this database if
+      # the path was spelled differently (symlink, relative path); the id
+      # comes from the backend, so catch it here. Disconnect it before
+      # registering the new process; otherwise connect_to_backend disconnects
+      # it once the new record arrives, and that cleanup pops and signals the
+      # new process's PID entry.
       old_client = _global_clients.get(db_id)
       if old_client is not None and old_client.is_closed:
         await disconnect_backend(db_id)
