@@ -13,6 +13,7 @@
         "listChanged": true
       }
     },
+    "instructions": "This server exposes many tools. An existing tool is not always the best choice:\nuse your own judgment whether to call a tool or to run code through\n`idapython_eval`. The goal is to complete the task efficiently.\n\nTwo facts should guide that judgment. `idapython_eval` (and most other tools)\nrun on IDA's main thread, one at a time, blocking the GUI and every other\ncaller until they return -- so make each script count: gather everything you\nneed in one, or apply all your renames and comments in one, rather than many\nsmall calls. `sql_query` runs off the main thread against an indexed SQLite\nmirror and serves requests concurrently, so for relational analysis\n(functions, strings, xrefs, callers/callees, imports, counts) it is almost\nalways the better option, and never the wrong one to try first.\n\nIn `idapython_eval`, `ida_domain` is pre-imported alongside the classic\n`ida_*`/`idc`/`idautils` modules; assume it is available and prefer its\nobject API (`db = ida_domain.Database()`, then `db.functions`, `db.xrefs`,\n`db.names`, ...). It is not guaranteed to exist: the name is None when the\npackage is not installed, and methods differ between versions. If it is None\nor a call fails, fall back to the classic modules rather than retrying.\n",
     "protocolVersion": "<version>",
     "serverInfo": {
       "name": "IDA Dynamic Proxy Gateway",

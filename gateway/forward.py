@@ -772,8 +772,12 @@ async def lifespan(app):
     await cleanup_logic()
 
 
+def _tool_mode() -> str:
+  return str(CONFIG.get("tool_mode", "hybrid")).lower().strip()
+
+
 def _build_mcp_transforms() -> list[Any]:
-  mode = str(CONFIG.get("tool_mode", "hybrid")).lower().strip()
+  mode = _tool_mode()
   if mode == "hybrid":
     from fastmcp.server.transforms.search import BM25SearchTransform  # pylint: disable=g-import-not-at-top
     from fastmcp.server.transforms.search.base import serialize_tools_for_output_markdown  # pylint: disable=g-import-not-at-top
@@ -796,12 +800,22 @@ def _build_mcp_transforms() -> list[Any]:
   return []
 
 
-_INSTRUCTIONS = """\
+# Server instructions: the first paragraph depends on tool_mode (see
+# _build_mcp_instructions), the rest is shared.
+_HYBRID_INSTRUCTIONS_INTRO = """\
 This server exposes many tools; some are visible by default, the rest can be
 found with `search_tools`. An existing tool is not always the best choice:
 use your own judgment whether to call a tool or to run code through
 `idapython_eval`. The goal is to complete the task efficiently.
+"""
 
+_FULL_INSTRUCTIONS_INTRO = """\
+This server exposes many tools. An existing tool is not always the best choice:
+use your own judgment whether to call a tool or to run code through
+`idapython_eval`. The goal is to complete the task efficiently.
+"""
+
+_INSTRUCTIONS_BODY = """\
 Two facts should guide that judgment. `idapython_eval` (and most other tools)
 run on IDA's main thread, one at a time, blocking the GUI and every other
 caller until they return -- so make each script count: gather everything you
@@ -819,9 +833,24 @@ package is not installed, and methods differ between versions. If it is None
 or a call fails, fall back to the classic modules rather than retrying.
 """
 
+
+def _build_mcp_instructions() -> str | None:
+  """Returns the server instructions for the configured tool_mode.
+
+  None for code_mode, whose clients see only CodeMode's search, get_schema
+  and execute tools rather than the tools that the instructions refer to.
+  """
+  mode = _tool_mode()
+  if mode == "hybrid":
+    return f"{_HYBRID_INSTRUCTIONS_INTRO}\n{_INSTRUCTIONS_BODY}"
+  if mode == "code_mode":
+    return None
+  return f"{_FULL_INSTRUCTIONS_INTRO}\n{_INSTRUCTIONS_BODY}"
+
+
 mcp_server = FastMCP(
     "IDA Dynamic Proxy Gateway",
-    instructions=_INSTRUCTIONS,
+    instructions=_build_mcp_instructions(),
     lifespan=lifespan,
     transforms=_build_mcp_transforms(),
 )

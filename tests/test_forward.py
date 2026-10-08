@@ -271,6 +271,31 @@ class TestHeadlessManager(unittest.IsolatedAsyncioTestCase):
       transforms = _build_mcp_transforms()
       self.assertEqual(transforms, [])
 
+  def test_build_mcp_instructions_hybrid(self):
+    """Test hybrid-mode instructions point to search_tools."""
+    from gateway.forward import _build_mcp_instructions
+
+    with mock.patch("gateway.forward.CONFIG", {"tool_mode": "hybrid"}):
+      instructions = _build_mcp_instructions() or ""
+    self.assertIn("`search_tools`", instructions)
+    self.assertIn("`sql_query`", instructions)
+
+  def test_build_mcp_instructions_full(self):
+    """Test full-mode instructions don't mention search_tools."""
+    from gateway.forward import _build_mcp_instructions
+
+    with mock.patch("gateway.forward.CONFIG", {"tool_mode": "full"}):
+      instructions = _build_mcp_instructions() or ""
+    self.assertNotIn("search_tools", instructions)
+    self.assertIn("`sql_query`", instructions)
+
+  def test_build_mcp_instructions_code_mode(self):
+    """Test code_mode gets no instructions."""
+    from gateway.forward import _build_mcp_instructions
+
+    with mock.patch("gateway.forward.CONFIG", {"tool_mode": "code_mode"}):
+      self.assertIsNone(_build_mcp_instructions())
+
   def test_shutdown_clients_ignores_sigterm(self):
     """Test shutdown_clients sets SIGTERM handler to SIG_IGN."""
     import signal
