@@ -796,8 +796,32 @@ def _build_mcp_transforms() -> list[Any]:
   return []
 
 
+_INSTRUCTIONS = """\
+This server exposes many tools; some are visible by default, the rest can be
+found with `search_tools`. An existing tool is not always the best choice:
+use your own judgment whether to call a tool or to run code through
+`idapython_eval`. The goal is to complete the task efficiently.
+
+Two facts should guide that judgment. `idapython_eval` (and most other tools)
+run on IDA's main thread, one at a time, blocking the GUI and every other
+caller until they return -- so make each script count: gather everything you
+need in one, or apply all your renames and comments in one, rather than many
+small calls. `sql_query` runs off the main thread against an indexed SQLite
+mirror and serves requests concurrently, so for relational analysis
+(functions, strings, xrefs, callers/callees, imports, counts) it is almost
+always the better option, and never the wrong one to try first.
+
+In `idapython_eval`, `ida_domain` is pre-imported alongside the classic
+`ida_*`/`idc`/`idautils` modules; assume it is available and prefer its
+object API (`db = ida_domain.Database()`, then `db.functions`, `db.xrefs`,
+`db.names`, ...). It is not guaranteed to exist: the name is None when the
+package is not installed, and methods differ between versions. If it is None
+or a call fails, fall back to the classic modules rather than retrying.
+"""
+
 mcp_server = FastMCP(
     "IDA Dynamic Proxy Gateway",
+    instructions=_INSTRUCTIONS,
     lifespan=lifespan,
     transforms=_build_mcp_transforms(),
 )
