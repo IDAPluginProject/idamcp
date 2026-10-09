@@ -226,6 +226,7 @@ class TestHeadlessManager(unittest.IsolatedAsyncioTestCase):
   def test_build_mcp_transforms_hybrid(self):
     """Test _build_mcp_transforms returns BM25SearchTransform for hybrid."""
     from gateway.forward import _build_mcp_transforms
+    from gateway.forward import _serialize_search_results
     from fastmcp.server.transforms.search import BM25SearchTransform
     from shared.config import _DEFAULT_ALWAYS_VISIBLE_TOOLS
 
@@ -237,6 +238,29 @@ class TestHeadlessManager(unittest.IsolatedAsyncioTestCase):
           set(transforms[0]._always_visible),
           set(_DEFAULT_ALWAYS_VISIBLE_TOOLS),
       )
+      self.assertIs(
+          transforms[0]._search_result_serializer, _serialize_search_results
+      )
+
+  def test_serialize_search_results(self):
+    """Test search results end with the note, also when no tool matched."""
+    from gateway.forward import _SEARCH_RESULTS_NOTE
+    from gateway.forward import _serialize_search_results
+    from fastmcp.tools import Tool
+
+    def rename_addresses(names: list[str]) -> None:
+      """Renames addresses."""
+      del names
+
+    tool = Tool.from_function(rename_addresses)
+    for tools, first_line in (
+        ([tool], "### rename_addresses"),
+        ([], "No tools matched the query."),
+    ):
+      with self.subTest(first_line=first_line):
+        result = _serialize_search_results(tools)
+        self.assertTrue(result.startswith(f"{first_line}\n"))
+        self.assertTrue(result.endswith(f"\n\n{_SEARCH_RESULTS_NOTE}"))
 
   def test_build_mcp_transforms_hybrid_custom_always_visible(self):
     """Test _build_mcp_transforms respects custom always_visible_tools."""

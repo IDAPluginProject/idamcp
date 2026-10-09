@@ -32,11 +32,14 @@ import re
 import signal
 import subprocess
 import sys
-from typing import Annotated, Any, Mapping, NotRequired
+from typing import Annotated, Any, Mapping, NotRequired, Sequence
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ResourceError
 from fastmcp.exceptions import ToolError
+from fastmcp.server.transforms.search import BM25SearchTransform
+from fastmcp.server.transforms.search import serialize_tools_for_output_markdown
+from fastmcp.tools import Tool
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
@@ -776,11 +779,24 @@ def _tool_mode() -> str:
   return str(CONFIG.get("tool_mode", "hybrid")).lower().strip()
 
 
+# Appended to search_tools results, where the agent is choosing a tool,
+# because agents don't always read the server instructions.
+_SEARCH_RESULTS_NOTE = (
+    "Note: prefer `sql_query` for lookups (it runs concurrently) and one"
+    " `idapython_eval` script to batch main-thread edits. Read this server's"
+    " instructions first if you haven't."
+)
+
+
+def _serialize_search_results(tools: Sequence[Tool]) -> str:
+  """Serializes search_tools results to Markdown and appends the note."""
+  markdown = serialize_tools_for_output_markdown(tools)
+  return f"{markdown}\n\n{_SEARCH_RESULTS_NOTE}"
+
+
 def _build_mcp_transforms() -> list[Any]:
   mode = _tool_mode()
   if mode == "hybrid":
-    from fastmcp.server.transforms.search import BM25SearchTransform  # pylint: disable=g-import-not-at-top
-    from fastmcp.server.transforms.search.base import serialize_tools_for_output_markdown  # pylint: disable=g-import-not-at-top
     from shared.config import _DEFAULT_ALWAYS_VISIBLE_TOOLS  # pylint: disable=g-import-not-at-top
 
     always_visible = CONFIG.get(
@@ -790,7 +806,7 @@ def _build_mcp_transforms() -> list[Any]:
         BM25SearchTransform(
             max_results=6,
             always_visible=always_visible,
-            search_result_serializer=serialize_tools_for_output_markdown,
+            search_result_serializer=_serialize_search_results,
         )
     ]
   elif mode == "code_mode":
