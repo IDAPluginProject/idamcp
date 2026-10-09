@@ -135,7 +135,7 @@ desktop tools.
 
 ### 2.3 Configurable Tool Exposure (`tool_mode`)
 
-Exposing all ~68 `@mcp_tool` schemas upfront in `tools/list` can consume
+Exposing all 89 `@mcp_tool` schemas upfront in `tools/list` can consume
 substantial prompt context for MCP clients that do not lazily load or filter
 tools, whereas collapsing everything into a single code-execution tool forces
 agents to write boilerplate loops for routine operations.
@@ -151,7 +151,7 @@ transforms based on the `tool_mode` setting (`TOOL_MODE` environment variable):
     `idalib_headless_open`, `idalib_headless_close`, `sql_query`,
     `decompile_function`, `disassemble_function`, `disassemble_code`,
     `get_ida_view`, `hexdump`, `idapython_eval`) remain pinned via
-    `always_visible` for direct 1-step invocation, while the remaining ~58
+    `always_visible` for direct 1-step invocation, while the remaining 79
     specialized tools are discovered on-demand via `search_tools` and invoked
     via `call_tool` (~70% fewer schema tokens than full JSON Schema).
 2.  **`"code_mode"`**: Applies FastMCP's `CodeMode` transform (`search`,

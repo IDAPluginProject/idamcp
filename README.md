@@ -98,7 +98,7 @@ Key capabilities of this implementation include:
     exposure strategies via FastMCP transforms—`"hybrid"` (default, pins core
     high-frequency tools upfront and exposes the rest on-demand via BM25
     search), `"code_mode"` (collapses tools into sandboxed Python discovery and
-    execution), and `"full"` (exposes all ~68 tools upfront).
+    execution), and `"full"` (exposes all 89 tools upfront).
 
 </details>
 
@@ -320,7 +320,7 @@ example of all available settings (showing defaults):
         visible, while placing the remaining tools behind on-demand
         `search_tools` and `call_tool` with compact Markdown schema
         serialization (~70% fewer tokens than JSON Schema).
-    *   `"full"`: Exposes all ~68 tools upfront in `tools/list`.
+    *   `"full"`: Exposes all 89 tools upfront in `tools/list`.
     *   `"code_mode"`: Uses FastMCP's `CodeMode` transform (`search`,
         `get_schema`, `execute`) to allow chaining multiple `await
         call_tool(...)` invocations inside a single sandboxed Python block.
