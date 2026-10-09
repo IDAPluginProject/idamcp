@@ -20,7 +20,9 @@
 
 """Unit tests for query database update hooks and worker synchronization."""
 
+import asyncio
 import importlib
+import inspect
 import queue
 import sys
 import threading
@@ -324,7 +326,7 @@ class TestDBUpdateHooks(unittest.TestCase):
 
 
 class TestDBWorkerFunctionAndXrefSync(unittest.TestCase):
-  """Tests verifying SQLite database updates by _db_worker for function and xref events."""
+  """Tests for the SQLite updates that _db_worker makes for events."""
 
   @classmethod
   def setUpClass(cls):
@@ -464,6 +466,64 @@ class TestDBWorkerFunctionAndXrefSync(unittest.TestCase):
     # Xrefs untouched
     cursor.execute("SELECT from_ea, from_function_ea FROM xrefs")
     self.assertEqual(cursor.fetchall(), [(4100, 4096)])
+
+  def test_func_updated_without_info_deletes_function(self):
+    self.conn.execute(
+        "INSERT INTO functions VALUES (4096, 4176, 'func1', NULL, NULL, 80, 0)"
+    )
+
+    query._db_update_queue.put(("func_updated", 4096, None))
+    query._db_update_queue.join()
+
+    count = self.conn.execute("SELECT COUNT(*) FROM functions").fetchone()[0]
+    self.assertEqual(count, 0)
+
+  def test_renamed_replaces_or_deletes_name(self):
+    with query._db_write_lock:
+      self.conn.execute("DROP TABLE IF EXISTS names")
+      self.conn.execute(
+          "CREATE TABLE names (address INTEGER PRIMARY KEY, name TEXT)"
+      )
+      self.conn.execute("INSERT INTO names VALUES (4096, 'old_name')")
+    query._created_tables.add("names")
+    self.addCleanup(query._created_tables.discard, "names")
+
+    query._db_update_queue.put(("renamed", 4096, "new_name", None, "old_name"))
+    query._db_update_queue.join()
+    rows = self.conn.execute("SELECT address, name FROM names").fetchall()
+    self.assertEqual(rows, [(4096, "new_name")])
+
+    query._db_update_queue.put(("renamed", 4096, "", None, "new_name"))
+    query._db_update_queue.join()
+    rows = self.conn.execute("SELECT address, name FROM names").fetchall()
+    self.assertEqual(rows, [])
+
+  def test_local_type_changed_replaces_or_deletes_row(self):
+    with query._db_write_lock:
+      self.conn.execute("DROP TABLE IF EXISTS local_types")
+      self.conn.execute(
+          "CREATE TABLE local_types (ordinal INTEGER PRIMARY KEY, name TEXT,"
+          " declaration TEXT)"
+      )
+      self.conn.executemany(
+          "INSERT INTO local_types VALUES (?, ?, ?)",
+          [(1, "TypeA", "struct TypeA;"), (2, "TypeB", "struct TypeB;")],
+      )
+    query._created_tables.add("local_types")
+    self.addCleanup(query._created_tables.discard, "local_types")
+
+    for event in (
+        ("local_type_changed", 1, query.LocalTypeInfo(1, "A2", "struct A2;")),
+        ("local_type_changed", 3, query.LocalTypeInfo(3, "C", "struct C;")),
+        ("local_type_changed", 2, None),
+    ):
+      query._db_update_queue.put(event)
+    query._db_update_queue.join()
+
+    rows = self.conn.execute(
+        "SELECT ordinal, name, declaration FROM local_types ORDER BY ordinal"
+    ).fetchall()
+    self.assertEqual(rows, [(1, "A2", "struct A2;"), (3, "C", "struct C;")])
 
   def test_func_deleted_clears_functions_and_xrefs(self):
     self.conn.execute(
@@ -688,6 +748,194 @@ class TestDBUpdateIDPHooks(unittest.TestCase):
     event = query._db_update_queue.get_nowait()
     query._db_update_queue.task_done()
     self.assertEqual(event, ("cref_added", 0x1010, 0x2000, 17, 0x1000))
+
+
+class TestSkipIfRebasing(unittest.TestCase):
+  """Tests for the skip_if_rebasing decorator."""
+
+  def test_preserves_arg_count_for_ida_swig_directors(self):
+    # IDAPython's get_callable_arg_count() in _ida_idp.so checks
+    # len(getfullargspec().args) to choose an event's signature, e.g., > 1
+    # for local_types_changed, > 3 for segm_deleted and > 4 for renamed.
+    # With fewer, IDA calls the older signature without the newer arguments.
+    decorated = [
+        (cls, name)
+        for cls in (query.DBUpdateHooks, query.DBUpdateIDPHooks)
+        for name, attr in vars(cls).items()
+        if hasattr(attr, "__wrapped__")
+    ]
+    self.assertIn((query.DBUpdateHooks, "local_types_changed"), decorated)
+    for cls, name in decorated:
+      with self.subTest(method=f"{cls.__name__}.{name}"):
+        method = getattr(cls(), name)
+        self.assertGreater(len(inspect.getfullargspec(method).args), 4)
+
+
+class TestDBWorkerSegmentsSync(unittest.TestCase):
+  """Tests for the segments update by _db_worker."""
+
+  def setUp(self):
+    super().setUp()
+    _drain_queue()
+    self.conn = query._get_rw_conn()
+    with query._db_write_lock:
+      self.conn.execute("DROP TABLE IF EXISTS segments")
+      self.conn.execute(
+          "CREATE TABLE segments (name TEXT, class TEXT, start_ea INTEGER,"
+          " end_ea INTEGER, size INTEGER, permissions TEXT)"
+      )
+      self.conn.execute(
+          "CREATE INDEX idx_segments_start ON segments (start_ea, end_ea)"
+      )
+      self.conn.execute(
+          "INSERT INTO segments VALUES ('.old', 'CODE', 4096, 8192, 4096,"
+          " 'r-x')"
+      )
+    query._created_tables.add("segments")
+    self.worker = threading.Thread(target=query._db_worker, daemon=True)
+    self.worker.start()
+
+  def tearDown(self):
+    query._db_update_queue.put(("quit",))
+    self.worker.join(timeout=2.0)
+    with query._db_write_lock:
+      self.conn.execute("DROP TABLE IF EXISTS segments")
+    query._created_tables.discard("segments")
+    super().tearDown()
+
+  def test_segment_changed_replaces_rows_and_keeps_index(self):
+    new_rows = [
+        (".text", "CODE", 4096, 8192, 4096, "r-x"),
+        (".data", "DATA", 8192, 12288, 4096, "rw-"),
+    ]
+    query._db_update_queue.put(("segment_changed", new_rows))
+    query._db_update_queue.join()
+
+    rows = self.conn.execute(
+        "SELECT * FROM segments ORDER BY start_ea"
+    ).fetchall()
+    self.assertEqual(rows, new_rows)
+    indexes = [
+        r[0]
+        for r in self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND"
+            " tbl_name='segments'"
+        )
+    ]
+    self.assertIn("idx_segments_start", indexes)
+
+
+class TestLocalTypesSync(unittest.TestCase):
+  """Tests for keeping local_types in sync with IDA."""
+
+  def setUp(self):
+    super().setUp()
+    _drain_queue()
+    self.hooks = query.DBUpdateHooks()
+    query._local_types_dirty = False
+
+  def tearDown(self):
+    _drain_queue()
+    query._local_types_dirty = False
+    super().tearDown()
+
+  def _create_local_types(self, rows):
+    conn = query._get_rw_conn()
+    with query._db_write_lock:
+      conn.execute("DROP TABLE IF EXISTS local_types")
+      conn.execute(
+          "CREATE TABLE local_types (ordinal INTEGER PRIMARY KEY, name TEXT,"
+          " declaration TEXT)"
+      )
+      conn.execute(
+          "CREATE INDEX idx_local_types_name ON local_types (name, ordinal)"
+      )
+      conn.executemany("INSERT INTO local_types VALUES (?, ?, ?)", rows)
+    query._created_tables.add("local_types")
+    self.addCleanup(query._created_tables.discard, "local_types")
+    return conn
+
+  @mock.patch.object(query, "_get_local_type_info")
+  def test_local_types_changed_with_ordinal_enqueues_single_update(
+      self, mock_get_info
+  ):
+    dummy_info = query.LocalTypeInfo(
+        23, "MyStruct", "struct MyStruct {int a;};"
+    )
+    mock_get_info.return_value = dummy_info
+
+    self.hooks.local_types_changed(1, 23, "MyStruct")
+    self.assertFalse(query._db_update_queue.empty())
+    event = query._db_update_queue.get_nowait()
+    query._db_update_queue.task_done()
+    self.assertEqual(event, ("local_type_changed", 23, dummy_info))
+    mock_get_info.assert_called_once_with(23)
+    self.assertFalse(query._local_types_dirty)
+
+  @mock.patch.object(query, "_get_local_type_info")
+  def test_local_types_changed_without_ordinal_marks_table_dirty(
+      self, mock_get_info
+  ):
+    # IDA 7.7 passes no arguments. Later versions pass ordinal 0 when they
+    # don't know which type changed; IDA 9.4 sends (7, 0, None) when a TIL is
+    # unloaded.
+    with self.subTest("no arguments"):
+      self.hooks.local_types_changed()
+      self.assertTrue(query._local_types_dirty)
+    query._local_types_dirty = False
+    with self.subTest("ordinal 0"):
+      self.hooks.local_types_changed(7, 0, None)
+      self.assertTrue(query._local_types_dirty)
+    self.assertTrue(query._db_update_queue.empty())
+    mock_get_info.assert_not_called()
+
+  def test_refresh_local_types_updates_rows_in_place(self):
+    conn = self._create_local_types([
+        (1, "KeepType", "struct KeepType { int a; };"),
+        (2, "ModType", "struct ModType { int old; };"),
+        (3, "DelType", "struct DelType { int gone; };"),
+    ])
+    ida_types = [
+        (1, "KeepType", "struct KeepType { int a; };"),
+        (2, "ModTypeRenamed", "struct ModTypeRenamed { int new_field; };"),
+        (4, "AddedType", "struct AddedType { long x; };"),
+    ]
+    query._local_types_dirty = True
+    with mock.patch.object(
+        query, "_iter_local_types_info", return_value=iter(ida_types)
+    ):
+      query.refresh_local_types()
+
+    rows = conn.execute(
+        "SELECT ordinal, name, declaration FROM local_types ORDER BY ordinal"
+    ).fetchall()
+    self.assertEqual(rows, ida_types)
+    self.assertFalse(query._local_types_dirty)
+    # Updated in place: the table kept its index.
+    indexes = [
+        r[0]
+        for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND"
+            " tbl_name='local_types'"
+        )
+    ]
+    self.assertIn("idx_local_types_name", indexes)
+
+  def test_sql_query_refreshes_dirty_local_types_before_reading(self):
+    self._create_local_types([(1, "TypeA", "struct TypeA;")])
+    query._local_types_dirty = True
+    with (
+        mock.patch.object(query, "_db_initialized", True),
+        mock.patch.object(query, "refresh_local_types") as mock_refresh,
+    ):
+      results = asyncio.run(
+          query.sql_query([{
+              "sql": "SELECT name FROM local_types",
+              "tables": ["local_types"],
+          }])
+      )
+    mock_refresh.assert_called_once_with()
+    self.assertEqual(results[0]["rows"], [{"name": "TypeA"}])
 
 
 if __name__ == "__main__":

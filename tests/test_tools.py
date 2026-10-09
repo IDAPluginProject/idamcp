@@ -382,6 +382,7 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
         self.verify_sql_query_advanced,
         self.verify_xrefs_lifecycle,
         self.verify_sql_entries_table,
+        self.verify_local_types_sync,
         self.verify_safe_eval,
         self.verify_safe_eval_via_patch_assembly,
         self.verify_timeout_busy_handling,
@@ -3194,6 +3195,97 @@ load_config()["check_entries_freshness"] = False
 """
     await self.run_tool("idapython_eval", code=cleanup_code)
 
+  async def verify_local_types_sync(self):
+    """Verifies that local type changes reach the local_types table."""
+    ida_types_code = """
+import json, ida_typeinf
+idati = ida_typeinf.get_idati()
+types = {}
+for ordinal in range(1, ida_typeinf.get_ordinal_limit(idati)):
+  tif = ida_typeinf.tinfo_t()
+  if tif.get_numbered_type(idati, ordinal):
+    types[ordinal] = tif.get_type_name() or f"anonymous_type_{ordinal}"
+json.dumps(types)
+"""
+
+    async def assert_in_sync(step: str) -> None:
+      res = await self.run_tool("idapython_eval", code=ida_types_code)
+      ida_types = {int(k): v for k, v in json.loads(res["result"]).items()}
+      res = await self.run_tool(
+          "sql_query", sql="SELECT ordinal, name FROM local_types"
+      )
+      rows = {int(r["ordinal"], 16): r["name"] for r in res["rows"]}
+      self.assertEqual(rows, ida_types, f"local_types differs {step}")
+
+    async def declaration(name: str) -> str | None:
+      res = await self.run_tool(
+          "sql_query",
+          sql=f"SELECT declaration FROM local_types WHERE name = '{name}'",
+      )
+      return res["rows"][0]["declaration"] if res["rows"] else None
+
+    await assert_in_sync("before the test")
+
+    # 1. Add a type.
+    await self.run_tool(
+        "declare_type", c_decl="struct LocalTypesSyncProbe { int a; };"
+    )
+    self.assertIsNotNone(await declaration("LocalTypesSyncProbe"))
+    await assert_in_sync("after declare_type")
+
+    # 2. Add a member: the declaration column must follow.
+    add_member_code = """
+import ida_typeinf
+tif = ida_typeinf.tinfo_t()
+tif.get_named_type(None, "LocalTypesSyncProbe")
+tif.add_udm("added_member", ida_typeinf.tinfo_t(ida_typeinf.BT_INT32),
+            tif.get_size() * 8)
+"""
+    await self.run_tool("idapython_eval", code=add_member_code)
+    self.assertIn(
+        "added_member", await declaration("LocalTypesSyncProbe") or ""
+    )
+
+    # 3. Rename it.
+    rename_code = """
+import ida_typeinf
+tif = ida_typeinf.tinfo_t()
+tif.get_named_type(None, "LocalTypesSyncProbe")
+tif.rename_type("LocalTypesSyncRenamed")
+"""
+    await self.run_tool("idapython_eval", code=rename_code)
+    self.assertIsNone(await declaration("LocalTypesSyncProbe"))
+    await assert_in_sync("after the rename")
+
+    # 4. A change that IDA reports without an ordinal, e.g., when a TIL is
+    # unloaded: add a type while idamcp's hooks are off, then mark
+    # local_types dirty as the hook does. sql_query must refresh the table.
+    unseen_code = """
+import ida_typeinf
+from ida_mcp.tools import query
+query._db_hooks.unhook()
+try:
+  ida_typeinf.parse_decls(
+      None, "struct LocalTypesSyncUnseen { int a; };", None, 0
+  )
+finally:
+  query._db_hooks.hook()
+query._local_types_dirty = True
+"""
+    await self.run_tool("idapython_eval", code=unseen_code)
+    self.assertIsNotNone(await declaration("LocalTypesSyncUnseen"))
+    await assert_in_sync("after the refresh")
+
+    # 5. Delete both types.
+    delete_code = """
+import ida_typeinf
+for name in ("LocalTypesSyncRenamed", "LocalTypesSyncUnseen"):
+  ida_typeinf.del_named_type(None, name, ida_typeinf.NTF_TYPE)
+"""
+    await self.run_tool("idapython_eval", code=delete_code)
+    self.assertIsNone(await declaration("LocalTypesSyncRenamed"))
+    await assert_in_sync("after the deletes")
+
   async def verify_safe_eval(self):
     from gateway.patcher import _safe_eval_math
 
@@ -3591,7 +3683,7 @@ print(f"REBASE RESULT: {rc}")
 
   async def verify_db_versioning_and_migration(self):
     """Verifies that DB version is set and database is migrated if version is old."""
-    # 1. Verify current version is 5 (target version)
+    # 1. Verify current version is 6 (target version)
     res_dict = await self.run_tool("sql_query", sql="PRAGMA user_version")
     self.assertIsInstance(res_dict, dict)
     self.assertIn("rows", res_dict)
@@ -3599,7 +3691,7 @@ print(f"REBASE RESULT: {rc}")
     res = res_dict["rows"]
     self.assertEqual(len(res), 1)
     self.assertIn("user_version", res[0])
-    self.assertEqual(res[0]["user_version"], "0x5")
+    self.assertEqual(res[0]["user_version"], "0x6")
 
     # Verify functions table exists and has data (triggered population)
     funcs_res = await self.run_tool(
@@ -3671,13 +3763,13 @@ print("DEBUG: Reset checked flag")
     ]:
       self.assertNotIn(ent, entity_names)
 
-    # Now verify version is back to 5
+    # Now verify version is back to 6
     res_dict = await self.run_tool("sql_query", sql="PRAGMA user_version")
     self.assertIsInstance(res_dict, dict)
     self.assertIn("rows", res_dict)
     self.assertNotIn("error", res_dict)
     res = res_dict["rows"]
-    self.assertEqual(res[0]["user_version"], "0x5")
+    self.assertEqual(res[0]["user_version"], "0x6")
 
     # Now query functions again, it should trigger re-population and succeed
     funcs_res = await self.run_tool(

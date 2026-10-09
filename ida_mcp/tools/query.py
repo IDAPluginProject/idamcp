@@ -33,7 +33,7 @@ import sqlite3
 import threading
 import time
 import traceback
-from typing import Any, Iterable, Tuple
+from typing import Any, Iterable, Iterator, Tuple
 import weakref
 import ida_auto
 import ida_bytes
@@ -282,8 +282,8 @@ def _get_stored_min_ea(conn: sqlite3.Connection) -> int | None:
 def _check_and_migrate_db(conn: sqlite3.Connection) -> None:
   """Checks user_version and image_min_ea; migrates (recreates) DB if outdated.
 
-  Version 5.0 (represented as integer 5) anchors the table schema.
-  If target_version is older than 5 or if the recorded image_min_ea has changed,
+  Version 6.0 (represented as integer 6) anchors the table schema.
+  If target_version is older than 6 or if the recorded image_min_ea has changed,
   all tables are dropped and re-created from scratch.
 
   Args:
@@ -294,7 +294,7 @@ def _check_and_migrate_db(conn: sqlite3.Connection) -> None:
     row = cursor.fetchone()
     current_version = row[0] if row else 0
 
-    target_version = 5
+    target_version = 6
     stored_min_ea = _get_stored_min_ea(conn)
 
     needs_migration = (
@@ -538,16 +538,13 @@ def populate_functions():
 
   _recreate_and_insert(
       "functions",
-      "start_ea INTEGER, end_ea INTEGER, name TEXT, demangled_name TEXT,"
-      " prototype TEXT, size INTEGER, is_lib INTEGER",
+      "start_ea INTEGER PRIMARY KEY, end_ea INTEGER, name TEXT, demangled_name"
+      " TEXT, prototype TEXT, size INTEGER, is_lib INTEGER",
       _gen(),
       column_count=7,
   )
   with _db_write_lock:
     conn = _get_rw_conn()
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_functions_start ON functions (start_ea)"
-    )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_functions_end ON functions (end_ea)"
     )
@@ -615,13 +612,10 @@ def populate_names():
         yield (_to_signed_64(addr), name)
 
   _recreate_and_insert(
-      "names", "address INTEGER, name TEXT", _gen(), column_count=2
+      "names", "address INTEGER PRIMARY KEY, name TEXT", _gen(), column_count=2
   )
   with _db_write_lock:
     conn = _get_rw_conn()
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_names_address ON names (address)"
-    )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_names_name ON names (name, address)"
     )
@@ -742,26 +736,28 @@ def _get_local_type_info(ordinal: int) -> LocalTypeInfo | None:
   )
 
 
+def _iter_local_types_info() -> Iterator[tuple[int, str, str | None]]:
+  """Yields (ordinal, name, declaration) for each local type."""
+  idati = ida_typeinf.get_idati()
+  for ordinal in range(1, helper.get_ordinal_limit(idati)):
+    try:
+      info = _get_local_type_info(ordinal)
+    except Exception:  # pylint: disable=broad-exception-caught
+      continue
+    if info:
+      yield (info.ordinal, info.name, info.declaration)
+
+
 @_time_populator
 @idaread
 def populate_local_types():
   """Populates the local_types table."""
-
-  def _gen():
-    idati = ida_typeinf.get_idati()
-    type_count = helper.get_ordinal_limit(idati)
-    for ordinal in range(1, type_count):
-      try:
-        info = _get_local_type_info(ordinal)
-        if info:
-          yield (info.ordinal, info.name, info.declaration)
-      except Exception:  # pylint: disable=broad-exception-caught
-        continue
-
+  global _local_types_dirty
+  _local_types_dirty = False
   _recreate_and_insert(
       "local_types",
-      "ordinal INTEGER, name TEXT, declaration TEXT",
-      _gen(),
+      "ordinal INTEGER PRIMARY KEY, name TEXT, declaration TEXT",
+      _iter_local_types_info(),
       column_count=3,
   )
   with _db_write_lock:
@@ -770,6 +766,48 @@ def populate_local_types():
         "CREATE INDEX IF NOT EXISTS idx_local_types_name ON local_types (name,"
         " ordinal)"
     )
+
+
+@_time_populator
+@idaread
+def refresh_local_types() -> None:
+  """Updates local_types in place to match IDA's local types.
+
+  sql_query calls this before it reads local_types if IDA reported a change
+  without saying which type changed (see DBUpdateHooks.local_types_changed).
+  It runs on IDA's main thread, so no hook can queue a newer row between
+  reading the types and writing them.
+  """
+  global _local_types_dirty
+  _local_types_dirty = False
+  rows = list(_iter_local_types_info())
+  with _db_write_lock:
+    conn = _get_rw_conn()
+    conn.execute("BEGIN TRANSACTION")
+    try:
+      existing = {
+          ordinal: (name, declaration)
+          for ordinal, name, declaration in conn.execute(
+              "SELECT ordinal, name, declaration FROM local_types"
+          )
+      }
+      for ordinal, name, declaration in rows:
+        if existing.pop(ordinal, None) != (name, declaration):
+          conn.execute(
+              "INSERT OR REPLACE INTO local_types VALUES (?, ?, ?)",
+              (ordinal, name, declaration),
+          )
+      # The rows left in existing are types that IDA no longer has.
+      conn.executemany(
+          "DELETE FROM local_types WHERE ordinal = ?",
+          [(ordinal,) for ordinal in existing],
+      )
+      conn.execute("COMMIT")
+    except Exception:
+      if conn.in_transaction:
+        with contextlib.suppress(sqlite3.Error):
+          conn.execute("ROLLBACK")
+      raise
 
 
 @_time_populator
@@ -935,6 +973,9 @@ POPULATORS = {
 
 _strings_dirty = False
 _skip_string_updates = False
+# Set when IDA reports a local type change without saying which type changed;
+# sql_query then calls refresh_local_types before it reads local_types.
+_local_types_dirty = False
 
 
 @jsonrpc
@@ -972,6 +1013,8 @@ def sql_query(
         if table_name in POPULATORS:
           if not _table_exists(table_name):
             POPULATORS[table_name]()
+          elif table_name == "local_types" and _local_types_dirty:
+            refresh_local_types()
           elif (
               table_name == "entries"
               and load_config().get("check_entries_freshness")
@@ -1096,6 +1139,9 @@ def _db_worker():
       with _db_write_lock:
         cursor = conn.cursor()
         try:
+          # Each statement commits on its own, so replace a row with one
+          # INSERT OR REPLACE: after a DELETE, readers would find it missing
+          # until the INSERT.
           match action:
             case "renamed":
               func_info: FuncInfo | None
@@ -1103,13 +1149,15 @@ def _db_worker():
               old_name = event[4] if len(event) > 4 else ""
               signed_ea = _to_signed_64(ea)
               if _table_exists("names"):
-                cursor.execute(
-                    "DELETE FROM names WHERE address = ?", (signed_ea,)
-                )
                 if new_name:
                   cursor.execute(
-                      "INSERT INTO names (address, name) VALUES (?, ?)",
+                      "INSERT OR REPLACE INTO names (address, name) VALUES"
+                      " (?, ?)",
                       (signed_ea, new_name),
+                  )
+                else:
+                  cursor.execute(
+                      "DELETE FROM names WHERE address = ?", (signed_ea,)
                   )
 
               if _table_exists("functions"):
@@ -1245,12 +1293,15 @@ def _db_worker():
               signed_start = _to_signed_64(start_ea)
               signed_end = _to_signed_64(end_ea)
               if _table_exists("functions"):
-                cursor.execute(
-                    "DELETE FROM functions WHERE start_ea = ?", (signed_start,)
-                )
-                if func_info is not None:
+                if func_info is None:
                   cursor.execute(
-                      "INSERT INTO functions VALUES (?, ?, ?, ?, ?, ?, ?)",
+                      "DELETE FROM functions WHERE start_ea = ?",
+                      (signed_start,),
+                  )
+                else:
+                  cursor.execute(
+                      "INSERT OR REPLACE INTO functions"
+                      " VALUES (?, ?, ?, ?, ?, ?, ?)",
                       (
                           func_info.start_ea,
                           func_info.end_ea,
@@ -1280,12 +1331,14 @@ def _db_worker():
               ea, func_info = event[1:3]
               signed_ea = _to_signed_64(ea)
               if _table_exists("functions"):
-                cursor.execute(
-                    "DELETE FROM functions WHERE start_ea = ?", (signed_ea,)
-                )
-                if func_info is not None:
+                if func_info is None:
                   cursor.execute(
-                      "INSERT INTO functions VALUES (?, ?, ?, ?, ?, ?, ?)",
+                      "DELETE FROM functions WHERE start_ea = ?", (signed_ea,)
+                  )
+                else:
+                  cursor.execute(
+                      "INSERT OR REPLACE INTO functions"
+                      " VALUES (?, ?, ?, ?, ?, ?, ?)",
                       (
                           func_info.start_ea,
                           func_info.end_ea,
@@ -1317,12 +1370,13 @@ def _db_worker():
               info: LocalTypeInfo | None
               ordinal, info = event[1:3]
               if _table_exists("local_types"):
-                cursor.execute(
-                    "DELETE FROM local_types WHERE ordinal = ?", (ordinal,)
-                )
-                if info is not None:
+                if info is None:
                   cursor.execute(
-                      "INSERT INTO local_types VALUES (?, ?, ?)",
+                      "DELETE FROM local_types WHERE ordinal = ?", (ordinal,)
+                  )
+                else:
+                  cursor.execute(
+                      "INSERT OR REPLACE INTO local_types VALUES (?, ?, ?)",
                       (info.ordinal, info.name, info.declaration),
                   )
 
@@ -1399,13 +1453,20 @@ def _db_worker():
 
       if _db_update_queue.empty() and dirty_tables:
         if "segments" in dirty_tables and _table_exists("segments"):
-          _recreate_and_insert(
-              "segments",
-              "name TEXT, class TEXT, start_ea INTEGER, end_ea INTEGER,"
-              " size INTEGER, permissions TEXT",
-              dirty_tables["segments"],
-              column_count=6,
-          )
+          with _db_write_lock:
+            conn.execute("BEGIN TRANSACTION")
+            try:
+              conn.execute("DELETE FROM segments")
+              conn.executemany(
+                  "INSERT INTO segments VALUES (?, ?, ?, ?, ?, ?)",
+                  dirty_tables["segments"],
+              )
+              conn.execute("COMMIT")
+            except Exception:
+              if conn.in_transaction:
+                with contextlib.suppress(sqlite3.Error):
+                  conn.execute("ROLLBACK")
+              raise
         dirty_tables.clear()
     except Exception as e:  # pylint: disable=broad-exception-caught
       logging.exception("DB worker error: %s", e)
@@ -1413,15 +1474,36 @@ def _db_worker():
       _db_update_queue.task_done()
 
 
+_MISSING = object()
+
+
 def skip_if_rebasing(func=None, *, default_return=None):
-  """Decorator to skip hook callbacks when the database is rebasing."""
+  """Decorator to skip hook callbacks when the database is rebasing.
+
+  IDAPython's C++ get_callable_arg_count() calls inspect.getfullargspec()
+  (which does not follow __wrapped__) and checks len(spec.args) in _ida_idp.so
+  (e.g. local_types_changed checks > 1, segm_deleted checks > 3, renamed
+  checks > 4). Defining 5 explicit positional parameters with a sentinel
+  default ensures get_callable_arg_count() returns 5 (> 4) while forwarding
+  only the arguments actually passed by IDA.
+  """
 
   def decorator(f):
     @functools.wraps(f)
-    def wrapper(*args, **kwargs):
+    def wrapper(
+        self,
+        a1=_MISSING,
+        a2=_MISSING,
+        a3=_MISSING,
+        a4=_MISSING,
+        *args,
+        **kwargs,
+    ):
       if _is_rebasing:
         return default_return
-      return f(*args, **kwargs)
+      call_args = [x for x in (a1, a2, a3, a4) if x is not _MISSING]
+      call_args.extend(args)
+      return f(self, *call_args, **kwargs)
 
     return wrapper
 
@@ -1486,11 +1568,17 @@ class DBUpdateHooks(ida_idp.IDB_Hooks):
 
   @skip_if_rebasing
   def local_types_changed(
-      self, ltc=None, ordinal: int = 0, name: str = "", *args: Any
+      self, ltc=None, ordinal: int = 0, name: str | None = None, *args: Any
   ) -> None:
+    global _local_types_dirty
     del ltc, name, args
-    info = _get_local_type_info(ordinal)
-    _db_update_queue.put(("local_type_changed", ordinal, info))
+    if ordinal > 0:
+      info = _get_local_type_info(ordinal)
+      _db_update_queue.put(("local_type_changed", ordinal, info))
+    else:
+      # IDA 7.7 passes no arguments, and later versions pass ordinal 0 when
+      # they don't know which type changed, e.g., when a TIL is unloaded.
+      _local_types_dirty = True
 
   @skip_if_rebasing
   def local_type_renamed(
@@ -1755,7 +1843,7 @@ def close_tables() -> None:
   """Shuts down the background DB worker, unhooks IDA hooks, and closes SQLite connections."""
   global _db_initialized, _db_hooks, _db_idp_hooks, _worker_thread, _db_local
   global _db_version_checked, _created_tables, _strings_dirty, _comments_dirty
-  global _entries_fingerprint, _image_min_ea, _is_rebasing
+  global _entries_fingerprint, _image_min_ea, _is_rebasing, _local_types_dirty
 
   # 1. Unhook IDA IDB/IDP hooks
   if _db_hooks is not None:
@@ -1802,6 +1890,7 @@ def close_tables() -> None:
   _db_version_checked = False
   _strings_dirty = False
   _comments_dirty = False
+  _local_types_dirty = False
   _entries_fingerprint = None
   _image_min_ea = 0
   _is_rebasing = False

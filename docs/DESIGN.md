@@ -246,7 +246,7 @@ and `IDP_Hooks` to keep relational tables synchronized in real-time:
     rebase auto-analysis completes (`ida_auto.auto_is_ok()`), updates the stored
     `image_min_ea` in `_db_metadata`, and triggers table repopulation.
 *   **Schema Versioning & Migration**: The database tracks `PRAGMA
-    user_version = 3` and records `image_min_ea` in `_db_metadata`. On startup,
+    user_version = 6` and records `image_min_ea` in `_db_metadata`. On startup,
     `_check_and_migrate_db` automatically drops and re-initializes tables if a
     schema version mismatch or image base shift across sessions is detected.
 
