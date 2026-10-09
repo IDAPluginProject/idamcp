@@ -181,7 +181,7 @@ caught_own
     res1 = idapython_eval("result = 123\nx = 1", persist_globals=True)
     self.assertEqual(res1["result"], "123")
     res2 = idapython_eval("x = 2", persist_globals=True)
-    self.assertEqual(res2["result"], "")
+    self.assertEqual(res2["result"], "None")
 
   def test_entrypoint_functions_run_execute_main(self):
     """Test newly defined `main`, `run`, and `execute` functions are invoked with runtime globals."""
@@ -229,7 +229,7 @@ Later()
         "class Point:\n    pass\nPoint()": "Point",
         # A class made by type() here has no __module__.
         "type('Dyn', (), {})()": "Dyn",
-        "x = 1": "",
+        "x = 1": "NoneType",
     }
     for code, expected in cases.items():
       with self.subTest(code=code):
@@ -301,7 +301,7 @@ class TestNamespaces(unittest.TestCase):
     first = idapython_eval("def main():\n    return 'ran'", persist_globals=True)
     second = idapython_eval("unrelated = 1", persist_globals=True)
     self.assertEqual(first["result"], "ran")
-    self.assertEqual(second["result"], "")
+    self.assertEqual(second["result"], "None")
 
   def test_persistent_namespace_is_shared_by_all_callers(self):
     """Test that persistent state is one namespace, not keyed by caller."""
