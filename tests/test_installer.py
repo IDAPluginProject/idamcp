@@ -251,6 +251,48 @@ class TestInstallServer(unittest.TestCase):
     self.assertIn("mcp_servers", updated_data)
     self.assertIn("idamcp", updated_data["mcp_servers"])
 
+  def test_agy_install_omits_description_and_updates_antigravity_dir(self):
+    """Test agy config omits 'description' and syncs ~/.gemini/antigravity."""
+    legacy_dir = self.home_path / ".gemini" / "antigravity"
+    legacy_dir.mkdir(parents=True, exist_ok=True)
+
+    with mock.patch("pathlib.Path.home", return_value=self.home_path):
+      install.install_server("agy")
+
+    for rel_path in (
+        pathlib.Path(".gemini/config/mcp_config.json"),
+        pathlib.Path(".gemini/antigravity/mcp_config.json"),
+    ):
+      cfg_path = self.home_path / rel_path
+      self.assertTrue(cfg_path.exists(), f"Missing {cfg_path}")
+      with open(cfg_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+      self.assertIn("idamcp", data["mcpServers"])
+      self.assertNotIn("description", data["mcpServers"]["idamcp"])
+
+  def test_windows_venv_resolves_scripts_python_exe(self):
+    """Test VIRTUAL_ENV on Windows resolves command to Scripts/python.exe."""
+    venv_dir = self.home_path / "venv_idamcp"
+    scripts_dir = venv_dir / "Scripts"
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    python_exe = scripts_dir / "python.exe"
+    python_exe.write_text("", encoding="utf-8")
+
+    with (
+        mock.patch("pathlib.Path.home", return_value=self.home_path),
+        mock.patch.dict("os.environ", {"VIRTUAL_ENV": str(venv_dir)}),
+        mock.patch("sys.platform", "win32"),
+    ):
+      install.install_server("agy")
+
+    cfg_path = self.home_path / ".gemini" / "config" / "mcp_config.json"
+    with open(cfg_path, "r", encoding="utf-8") as f:
+      data = json.load(f)
+    self.assertEqual(
+        data["mcpServers"]["idamcp"]["command"],
+        str(python_exe),
+    )
+
 
 if __name__ == "__main__":
   unittest.main()

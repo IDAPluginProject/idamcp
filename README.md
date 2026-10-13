@@ -149,7 +149,7 @@ Follow these steps to set up the IDA MCP server and configure your client.
 git clone https://github.com/idamcp/idamcp.git
 cd idamcp
 
-# b. Install the IDA Pro plugin
+# b. Install the IDA Pro plugin (use `python` on Windows if `python3` is not set)
 python3 install.py plugin
 
 # c. Install the dependencies
@@ -163,28 +163,31 @@ venv_idamcp\Scripts\activate.bat
 # On Windows (PowerShell):
 venv_idamcp\Scripts\activate.ps1
 
-python3 -m pip install -r requirements.txt
+# Inside the activated virtual environment, use `python` (on Windows, venvs
+# provide `python.exe` rather than `python3.exe`):
+python -m pip install -r requirements.txt
 
 # d. Install IDA Python library module, please update the path accordingly
 cd </path/to/IDA/installation/idalib/python>
 
-python3 -m pip install "idapro*.whl"
-python3 py-activate-idalib.py
+python -m pip install "idapro*.whl"
+python py-activate-idalib.py
 
 
-# f. Register the server with your preferred LLM client:
+# f. Register the server with your preferred LLM client (run from the idamcp repo):
+cd </path/to/idamcp>
 
-# For google antigravity-cli
-python3 install.py agy
+# For google antigravity-cli / Antigravity IDE
+python install.py agy
 
 # For Codex
-python3 install.py codex
+python install.py codex
 
 # For Claude Code
-python3 install.py claude
+python install.py claude
 
 # For Gemini CLI
-python3 install.py gemini
+python install.py gemini
 ```
 
 **2. Verify the Gateway (Optional / Testing Only)**
