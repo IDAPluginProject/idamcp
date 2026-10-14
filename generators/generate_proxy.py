@@ -170,10 +170,11 @@ from shared.types import *
 try:
   import gateway.patcher
   _ = gateway.patcher
-except ImportError as e:
+except (ImportError, OSError) as e:
   print(
       f"[WARNING] Failed to load gateway.patcher: {e}. 'patch_assembly' tool"
-      " will not be available."
+      " will not be available.",
+      file=sys.stderr,
   )
 
 try:
@@ -182,7 +183,8 @@ try:
 except ImportError as e:
   print(
       f"[WARNING] Failed to load gateway.query: {e}. 'sql_query' tool will"
-      " not be available."
+      " not be available.",
+      file=sys.stderr,
   )
 """
 

@@ -219,7 +219,7 @@ except ImportError as e:
   shim_path = target_dir / "ida_mcp_loader.py"
 
   try:
-    with open(shim_path, "w") as f:
+    with open(shim_path, "w", encoding="utf-8") as f:
       f.write(shim_code)
     print(f"[+] Success! Loader installed to: {shim_path}")
     print(
@@ -235,10 +235,88 @@ except ImportError as e:
     print(f"[x] An error occurred: {e}")
 
 
+def _resolve_python_executable(venv: str | None) -> str:
+  """Returns the Python binary in venv if present, else sys.executable."""
+  if venv:
+    venv_path = pathlib.Path(venv).expanduser()
+    candidates = (
+        [
+            venv_path / "Scripts" / "python.exe",
+            venv_path / "bin" / "python.exe",
+            venv_path / "bin" / "python",
+        ]
+        if sys.platform == "win32"
+        else [
+            venv_path / "bin" / "python",
+            venv_path / "bin" / "python3",
+            venv_path / "Scripts" / "python.exe",
+        ]
+    )
+    for candidate in candidates:
+      if candidate.is_file():
+        return str(candidate)
+  return sys.executable
+
+
+def _write_json_mcp_config(
+    settings_path: pathlib.Path,
+    name: str,
+    server_entry: dict[str, object],
+) -> None:
+  """Safely updates a JSON MCP configuration file with backup."""
+  settings = {}
+  if settings_path.exists():
+    try:
+      with open(settings_path, "r", encoding="utf-8") as f:
+        settings = json.load(f)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+      print(
+          "[x] Error: Failed to parse existing configuration at"
+          f" {settings_path}: {e}"
+      )
+      return
+
+    if not isinstance(settings, dict):
+      print(
+          f"[x] Error: Configuration root in {settings_path} must be a JSON"
+          f" object (dict), got {type(settings).__name__}."
+      )
+      return
+
+    # Make a backup with timestamp for the original configuration
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = settings_path.parent / f"{settings_path.name}.{timestamp}.bak"
+    try:
+      shutil.copy2(settings_path, backup_path)
+      print(f"[+] Backed up original configuration to: {backup_path}")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+      print(f"[x] Error: Failed to create backup at {backup_path}: {e}")
+      return
+  else:
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+
+  if "mcpServers" not in settings or not isinstance(
+      settings["mcpServers"], dict
+  ):
+    settings["mcpServers"] = {}
+
+  settings["mcpServers"]["idamcp"] = dict(server_entry)
+
+  try:
+    with open(settings_path, "w", encoding="utf-8") as f:
+      json.dump(settings, f, indent=2)
+    print(
+        f"[+] {name.capitalize()} MCP server 'idamcp' configured successfully"
+        f" in {settings_path}."
+    )
+  except Exception as e:  # pylint: disable=broad-exception-caught
+    print(f"[!] Failed to save settings to {settings_path}: {e}")
+
+
 def install_server(
     name: Literal["gemini", "agy", "jetski", "claude", "codex"] = "gemini",
 ) -> None:
-  """Installs the IDA MCP server configuration for Gemini CLI."""
+  """Installs the IDA MCP server configuration for the selected client."""
 
   # 1. Get VIRTUAL_ENV
   venv = os.environ.get("VIRTUAL_ENV")
@@ -255,25 +333,33 @@ def install_server(
     else:
       print("[i] Non-interactive environment, proceeding without VIRTUAL_ENV.")
 
-  # 2. Get PYTHONPATH (Project Root)
+  # 2. Get PYTHONPATH (Project Root) and resolve Python executable
   repo_dir = pathlib.Path(__file__).resolve().parent
   env_vars = {"PYTHONPATH": str(repo_dir)}
   if venv:
     env_vars["VIRTUAL_ENV"] = venv
+  python_cmd = _resolve_python_executable(venv)
 
   # 3. Modify settings file
   home = pathlib.Path.home()
   match name:
     case "gemini":
-      settings_path = home / ".gemini" / "settings.json"
-    case "agy" | "jetski":
-      settings_path = home / ".gemini" / "config" / "mcp_config.json"
+      settings_paths = [home / ".gemini" / "settings.json"]
+    case "agy":
+      settings_paths = [home / ".gemini" / "config" / "mcp_config.json"]
+      legacy_agy_dir = home / ".gemini" / "antigravity"
+      legacy_agy_path = legacy_agy_dir / "mcp_config.json"
+      if legacy_agy_dir.is_dir() or legacy_agy_path.exists():
+        settings_paths.append(legacy_agy_path)
+    case "jetski":
+      settings_paths = [home / ".gemini" / "config" / "mcp_config.json"]
     case "claude":
-      settings_path = home / ".claude.json"
+      settings_paths = [home / ".claude.json"]
     case "codex":
-      settings_path = home / ".codex" / "config.toml"
+      settings_paths = [home / ".codex" / "config.toml"]
 
   if name == "codex":
+    settings_path = settings_paths[0]
     if tomllib is None:
       print(
           "[x] Error: 'tomllib' (Python 3.11+) or 'tomli' library is required"
@@ -327,7 +413,7 @@ def install_server(
       settings["mcp_servers"] = {}
 
     settings["mcp_servers"]["idamcp"] = {
-        "command": sys.executable,
+        "command": python_cmd,
         "args": ["-m", "gateway.proxy", "--transport", "stdio"],
         "env": env_vars,
     }
@@ -344,58 +430,21 @@ def install_server(
     return
 
   # JSON path (gemini, agy, jetski, claude)
-  settings = {}
-  if settings_path.exists():
-    try:
-      with open(settings_path, "r") as f:
-        settings = json.load(f)
-    except Exception as e:  # pylint: disable=broad-exception-caught
-      print(
-          "[x] Error: Failed to parse existing configuration at"
-          f" {settings_path}: {e}"
-      )
-      return
-
-    if not isinstance(settings, dict):
-      print(
-          f"[x] Error: Configuration root in {settings_path} must be a JSON"
-          f" object (dict), got {type(settings).__name__}."
-      )
-      return
-
-    # Make a backup with timestamp for the original configuration
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = settings_path.parent / f"{settings_path.name}.{timestamp}.bak"
-    try:
-      shutil.copy2(settings_path, backup_path)
-      print(f"[+] Backed up original configuration to: {backup_path}")
-    except Exception as e:  # pylint: disable=broad-exception-caught
-      print(f"[x] Error: Failed to create backup at {backup_path}: {e}")
-      return
-  else:
-    settings_path.parent.mkdir(parents=True, exist_ok=True)
-
-  if "mcpServers" not in settings:
-    settings["mcpServers"] = {}
-
-  settings["mcpServers"]["idamcp"] = {
-      "command": sys.executable,
+  # Note: Antigravity/Jetski mcp_config.json schema sets
+  # additionalProperties=false on mcpServer entries and does not allow
+  # 'description'. Only include 'description' for Gemini CLI settings.json.
+  server_entry: dict[str, object] = {
+      "command": python_cmd,
       "args": ["-m", "gateway.proxy", "--transport", "stdio"],
       "env": env_vars,
-      "description": (
-          "IDA Pro MCP Server for reverse engineering and binary analysis"
-      ),
   }
-
-  try:
-    with open(settings_path, "w") as f:
-      json.dump(settings, f, indent=2)
-    print(
-        f"[+] {name.capitalize()} MCP server 'idamcp' configured successfully"
-        f" in {settings_path}."
+  if name == "gemini":
+    server_entry["description"] = (
+        "IDA Pro MCP Server for reverse engineering and binary analysis"
     )
-  except Exception as e:  # pylint: disable=broad-exception-caught
-    print(f"[!] Failed to save settings to {settings_path}: {e}")
+
+  for settings_path in settings_paths:
+    _write_json_mcp_config(settings_path, name, server_entry)
 
 
 if __name__ == "__main__":
