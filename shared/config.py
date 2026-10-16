@@ -64,6 +64,11 @@ _DEFAULT_CONFIG = {
     "hotkey": "Ctrl-Alt-M",
     "tool_mode": "hybrid",  # "full" | "hybrid" | "code_mode"
     "always_visible_tools": _DEFAULT_ALWAYS_VISIBLE_TOOLS,
+    "show_decompiler_warnings": False,
+    # Hex-Rays warnings that decompile_function leaves out. "Using guessed
+    # type" notes come with most calls, and "possibly undefined" ones mostly
+    # flag call arguments that the pseudocode already shows as never set.
+    "omitted_decompiler_warnings": ["WARN_GUESSED_TYPE", "WARN_UNDEF_LVAR"],
 }
 
 
@@ -194,6 +199,8 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
   _set_option_from_env(config, "hotkey")
   _set_option_from_env(config, "tool_mode")
   _set_option_from_env(config, "always_visible_tools")
+  _set_option_from_env(config, "show_decompiler_warnings")
+  _set_option_from_env(config, "omitted_decompiler_warnings")
 
   # Expand registry_dir path
   config["registry_dir"] = pathlib.Path(config["registry_dir"]).expanduser()

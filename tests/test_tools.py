@@ -595,9 +595,7 @@ class TestIDAMCP(unittest.IsolatedAsyncioTestCase):
         " opt.display_only_existing_strings,\n    'ignore_heads':"
         " opt.ignore_heads,\n}\nidautils.Strings(default_setup=True)\n"
     )
-    await self.run_tool(
-        "idapython_eval", code=save_code, persist_globals=True
-    )
+    await self.run_tool("idapython_eval", code=save_code, persist_globals=True)
 
     try:
       # Load golden data
@@ -1194,6 +1192,60 @@ hex(tid) if tid is not None else ""
     self.assertEqual(
         normalize_text(result_no_prefix), normalize_text(expected_no_prefix)
     )
+
+    async def set_config(name: str, value: typing.Any) -> None:
+      await self.run_tool(
+          "idapython_eval",
+          code=(
+              "from shared.config import load_config\n"
+              f"load_config()[{name!r}] = {value!r}"
+          ),
+      )
+
+    # Hex-Rays warnings are off by default; _start trips "positive sp value".
+    result = await self.run_tool("decompile_function", address="0x10d0")
+    self.assertNotIn("Hex-Rays warning", result)
+
+    # show_decompiler_warnings puts them in comments. Even then, _start's
+    # "possibly undefined" warning and the "using guessed type" one of the
+    # thunk at 0x10a0 are left out by default.
+    warnings_code = """
+import ida_hexrays
+ids = set()
+for ea in (0x10d0, 0x10a0):
+  ids.update(w.id for w in ida_hexrays.decompile(ea).get_warnings())
+{ida_hexrays.WARN_UNDEF_LVAR, ida_hexrays.WARN_GUESSED_TYPE} <= ids
+"""
+    res = await self.run_tool("idapython_eval", code=warnings_code)
+    self.assertEqual(res["result"], "True")
+    await set_config("show_decompiler_warnings", True)
+    result = await self.run_tool("decompile_function", address="0x10d0")
+    self.assertIn("// Hex-Rays warning: positive sp value", result)
+    self.assertNotIn("possibly undefined", result)
+    result = await self.run_tool(
+        "decompile_function", address="0x10d0", include_line_prefix=True
+    )
+    self.assertRegex(result, r"\]\| +// Hex-Rays warning: positive sp value")
+    result = await self.run_tool("decompile_function", address="0x10a0")
+    self.assertNotIn("using guessed type", result)
+
+    # omitted_decompiler_warnings picks the warnings to leave out.
+    await set_config("omitted_decompiler_warnings", [])
+    result = await self.run_tool("decompile_function", address="0x10d0")
+    self.assertRegex(result, r"// Hex-Rays warning: .* is possibly undefined")
+    result = await self.run_tool("decompile_function", address="0x10a0")
+    self.assertIn("// Hex-Rays warning: using guessed type", result)
+
+    # Entries that aren't warning names are skipped.
+    await set_config(
+        "omitted_decompiler_warnings", [None, "WARN_BOGUS", "WARN_GUESSED_TYPE"]
+    )
+    result = await self.run_tool("decompile_function", address="0x10a0")
+    self.assertNotIn("using guessed type", result)
+    await set_config(
+        "omitted_decompiler_warnings", ["WARN_GUESSED_TYPE", "WARN_UNDEF_LVAR"]
+    )
+    await set_config("show_decompiler_warnings", False)
 
   async def verify_disassemble_code(self):
     # Load golden data

@@ -276,6 +276,55 @@ class TestConfig(unittest.TestCase):
           ["list_available_databases", "sql_query"],
       )
 
+  def test_show_decompiler_warnings_default(self):
+    """Test show_decompiler_warnings is off by default."""
+    config = shared.config.load_config(config_path="/nonexistent")
+    self.assertIs(config.get("show_decompiler_warnings"), False)
+
+  def test_show_decompiler_warnings_env(self):
+    """Test SHOW_DECOMPILER_WARNINGS environment variable."""
+    with mock.patch.dict("os.environ", {"SHOW_DECOMPILER_WARNINGS": "1"}):
+      config = shared.config.load_config(config_path="/nonexistent")
+    self.assertIs(config.get("show_decompiler_warnings"), True)
+
+  def test_omitted_decompiler_warnings_default(self):
+    """Test omitted_decompiler_warnings default list."""
+    config = shared.config.load_config(config_path="/nonexistent")
+    self.assertEqual(
+        config.get("omitted_decompiler_warnings"),
+        ["WARN_GUESSED_TYPE", "WARN_UNDEF_LVAR"],
+    )
+
+  def test_omitted_decompiler_warnings_user(self):
+    """Test custom omitted_decompiler_warnings in user config file."""
+    with mock.patch(
+        "builtins.open",
+        mock.mock_open(
+            read_data='{"omitted_decompiler_warnings": ["WARN_GUESSED_TYPE"]}'
+        ),
+    ):
+      with mock.patch("pathlib.Path.is_file", return_value=True):
+        config = shared.config.load_config()
+        self.assertEqual(
+            config.get("omitted_decompiler_warnings"), ["WARN_GUESSED_TYPE"]
+        )
+
+  def test_omitted_decompiler_warnings_env(self):
+    """Test OMITTED_DECOMPILER_WARNINGS replaces the list."""
+    with mock.patch.dict(
+        "os.environ", {"OMITTED_DECOMPILER_WARNINGS": " WARN_UNDEF_LVAR "}
+    ):
+      config = shared.config.load_config(config_path="/nonexistent")
+    self.assertEqual(
+        config.get("omitted_decompiler_warnings"), ["WARN_UNDEF_LVAR"]
+    )
+
+    # An empty value leaves out no warnings.
+    shared.config.load_config.cache_clear()
+    with mock.patch.dict("os.environ", {"OMITTED_DECOMPILER_WARNINGS": ""}):
+      config = shared.config.load_config(config_path="/nonexistent")
+    self.assertEqual(config.get("omitted_decompiler_warnings"), [])
+
 
 if __name__ == "__main__":
   unittest.main()

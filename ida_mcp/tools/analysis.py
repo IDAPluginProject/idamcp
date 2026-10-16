@@ -21,6 +21,7 @@
 
 """This module provides analysis tools for IDA Pro."""
 
+import collections
 import contextlib
 import json
 import logging
@@ -43,6 +44,7 @@ import ida_xref
 import idaapi
 import idautils
 import idc
+from shared.config import load_config
 from shared.rpc import ToolError
 from shared.types import BasicBlock
 from shared.types import Caller
@@ -74,6 +76,23 @@ def get_xrefs_from(
   return rv
 
 
+def _omitted_warning_ids() -> set[int]:
+  """Returns the IDs of the warnings named in omitted_decompiler_warnings.
+
+  Unknown names are logged and skipped, since the WARN_* names differ
+  between IDA versions.
+  """
+  ids = set()
+  for name in load_config().get("omitted_decompiler_warnings", []):
+    if isinstance(name, str) and name.startswith("WARN_"):
+      warn_id = getattr(ida_hexrays, name, None)
+      if isinstance(warn_id, int):
+        ids.add(warn_id)
+        continue
+    logging.warning("Unknown Hex-Rays warning name: %r", name)
+  return ids
+
+
 @jsonrpc
 @idaread
 def decompile_function(
@@ -89,10 +108,18 @@ def decompile_function(
   cfunc = helper.decompile_checked(start)
 
   sv = cfunc.get_pseudocode()
-  if not include_line_prefix:
+  # Hex-Rays warnings go in comments above the line each refers to, or at the
+  # top when no line matches.
+  warning_entries: dict[int, list[str]] = collections.defaultdict(list)
+  if load_config().get("show_decompiler_warnings"):
+    omitted = _omitted_warning_ids()
+    for w in cfunc.get_warnings():
+      if w.id not in omitted and w.text not in warning_entries[w.ea]:
+        warning_entries[w.ea].append(w.text)
+  if not include_line_prefix and not warning_entries:
     return "\n".join(ida_lines.tag_remove(sl.line) for sl in sv)
 
-  lines = []
+  body_lines: list[tuple[int | None, str]] = []
   for i, sl in enumerate(sv):
     sl: ida_kernwin.simpleline_t
     item = ida_hexrays.ctree_item_t()
@@ -113,7 +140,23 @@ def decompile_function(
           with contextlib.suppress(ValueError):
             addr = int(ds[0], 16)
 
-    lines.append((addr, ida_lines.tag_remove(sl.line)))
+    raw_line = ida_lines.tag_remove(sl.line)
+    if addr is not None and addr != idc.BADADDR and addr in warning_entries:
+      indent = raw_line[: len(raw_line) - len(raw_line.lstrip(" "))]
+      for warn_text in warning_entries.pop(addr):
+        body_lines.append((addr, f"{indent}// Hex-Rays warning: {warn_text}"))
+
+    body_lines.append((addr, raw_line))
+
+  prefix_lines: list[tuple[int | None, str]] = []
+  for warn_texts in warning_entries.values():
+    for warn_text in warn_texts:
+      prefix_lines.append((None, f"// Hex-Rays warning: {warn_text}"))
+
+  lines = prefix_lines + body_lines
+  if not include_line_prefix:
+    return "\n".join(line for _, line in lines)
+
   valid_addrs = [u[0] for u in lines if u[0] is not None]
   max_addr_hex_len = len(hex(max(valid_addrs, default=cfunc.entry_ea)))
   max_line_no_len = len(str(len(lines) + 1))

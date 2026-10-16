@@ -262,7 +262,9 @@ example of all available settings (showing defaults):
     "get_ida_view",
     "hexdump",
     "idapython_eval"
-  ]
+  ],
+  "show_decompiler_warnings": false,
+  "omitted_decompiler_warnings": ["WARN_GUESSED_TYPE", "WARN_UNDEF_LVAR"]
 }
 ```
 
@@ -333,6 +335,17 @@ example of all available settings (showing defaults):
     "idalib_headless_close", "sql_query", "decompile_function",
     "disassemble_function", "disassemble_code", "get_ida_view", "hexdump",
     "idapython_eval"]`.
+*   **show_decompiler_warnings**: If `True`, `decompile_function` shows
+    Hex-Rays warnings, such as "positive sp value has been found", in
+    `// Hex-Rays warning:` comments above the line each refers to (or at the
+    top), except those in `omitted_decompiler_warnings`. Defaults to `False`.
+*   **omitted_decompiler_warnings**: The Hex-Rays warnings that
+    `decompile_function` leaves out, named as in IDA's `ida_hexrays` module.
+    Names that the running IDA doesn't define are logged and ignored.
+    Defaults to `["WARN_GUESSED_TYPE", "WARN_UNDEF_LVAR"]`: "using guessed
+    type" notes come with most calls, and "possibly undefined" ones mostly
+    flag call arguments that the pseudocode already shows as never set. `[]`
+    shows all warnings.
 
 </details>
 
@@ -366,6 +379,12 @@ example of all available settings (showing defaults):
 *   **ALWAYS_VISIBLE_TOOLS**: A comma-separated list of tool names that remain
     directly visible when `tool_mode` is `"hybrid"` (e.g.,
     `list_available_databases,sql_query,decompile_function`).
+*   **SHOW_DECOMPILER_WARNINGS**: Set to `true`, `1`, or `yes` to enable
+    `show_decompiler_warnings`; any other value disables it.
+*   **OMITTED_DECOMPILER_WARNINGS**: Overrides `omitted_decompiler_warnings`
+    with a comma-separated list of warning names (e.g., `WARN_GUESSED_TYPE`
+    to show "possibly undefined" warnings too); an empty value shows all
+    warnings.
 
 </details>
 
