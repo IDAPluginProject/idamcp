@@ -28,6 +28,7 @@ import unittest
 from unittest import mock
 
 from fastmcp.exceptions import ToolError
+from gateway import forward
 from gateway.forward import _backend_events
 from gateway.forward import _background_tasks
 from gateway.forward import _global_client_state
@@ -35,10 +36,14 @@ from gateway.forward import _global_clients
 from gateway.forward import _global_database_id_to_pid
 from gateway.forward import _global_metadata
 from gateway.forward import _headless_manager
+from gateway.forward import _is_watcher_active
+from gateway.forward import available_databases
 from gateway.forward import connect_to_backend
 from gateway.forward import forward_to
 from gateway.forward import HeadlessManager
 from gateway.forward import idalib_headless_close
+from gateway.forward import lifespan
+from gateway.forward import list_available_databases
 from shared.rpc import RPCServer
 
 
@@ -505,3 +510,145 @@ class TestSpawnWithBackends(unittest.IsolatedAsyncioTestCase):
         await self.manager.spawn(str(self.target))
 
     await self._assert_new_instance_kept()
+
+  async def test_concurrent_connects_share_one_client(self):
+    """Test concurrent connect_to_backend calls for one record don't race."""
+    await self._start_backend("new", _NEW_PID)
+    self.manager.register(_DB, _NEW_PID)
+    with mock.patch(
+        "gateway.forward.RPCClient", wraps=forward.RPCClient
+    ) as client_cls:
+      await asyncio.gather(*(connect_to_backend(self.record) for _ in range(3)))
+      first_client = _global_clients[_DB]
+      # A later call for the same record is a no-op.
+      await connect_to_backend(self.record)
+
+    self.assertIs(_global_clients[_DB], first_client)
+    # Only the winner's client was created; the others returned before
+    # connecting, so nothing was leaked or disconnected.
+    self.assertEqual(client_cls.call_count, 1)
+    await self._assert_new_instance_kept()
+
+  async def test_record_with_new_pid_replaces_connection(self):
+    """Test that a record rewritten by a new process replaces the client."""
+    await self._start_backend("old", _OLD_PID)
+    await connect_to_backend(self.record)
+    old_client = _global_clients[_DB]
+    await self._start_backend("new", _NEW_PID)
+    await connect_to_backend(self.record)
+
+    self.assertIsNot(_global_clients[_DB], old_client)
+    self.assertTrue(old_client.is_closed)
+    self.assertEqual(await forward_to(_DB, "whoami", {}), "new")
+
+
+class TestWatcherFallback(unittest.IsolatedAsyncioTestCase):
+  """Tests for filesystem watcher failure handling and fallback scanning."""
+
+  async def asyncSetUp(self):
+    self.tmp_dir = tempfile.TemporaryDirectory()
+    self.registry_dir = pathlib.Path(self.tmp_dir.name)
+    self.servers: list[RPCServer] = []
+    _global_clients.clear()
+    _global_metadata.clear()
+    _global_database_id_to_pid.clear()
+    _global_client_state.clear()
+    _backend_events.clear()
+
+  async def asyncTearDown(self):
+    for client in list(_global_clients.values()):
+      await client.close()
+    for server in self.servers:
+      await server.close()
+    await asyncio.gather(*_background_tasks, return_exceptions=True)
+    _global_clients.clear()
+    _global_metadata.clear()
+    _global_database_id_to_pid.clear()
+    _global_client_state.clear()
+    _backend_events.clear()
+    self.tmp_dir.cleanup()
+
+  async def _create_test_backend(self, db_id: str, pid: int = 12345):
+    server = RPCServer({"whoami": lambda: db_id})
+    tcp_server = await server.start_tcp("127.0.0.1", 0)
+    self.servers.append(server)
+    port = tcp_server.sockets[0].getsockname()[1]
+    record = {
+        "pid": pid,
+        "channel": "tcp",
+        "address": port,
+        "name": db_id,
+        "metadata": {"filepath": f"/fake/{db_id}.i64"},
+    }
+    reg_file = self.registry_dir / f"{db_id}.json"
+    reg_file.write_text(json.dumps(record), encoding="utf-8")
+    return server
+
+  async def test_lifespan_survives_watcher_start_failure(self):
+    """Test that lifespan enters and exits cleanly when Observer.start fails."""
+    with (
+        mock.patch("gateway.forward.REGISTRY_DIR", self.registry_dir),
+        mock.patch(
+            "gateway.forward.Observer.start",
+            side_effect=OSError(28, "No space left on device"),
+        ),
+    ):
+      async with lifespan(None):
+        self.assertFalse(_is_watcher_active())
+
+  async def test_list_available_databases_scans_when_watcher_inactive(self):
+    """Test list_available_databases connects new backends when inactive."""
+    await self._create_test_backend("db_fallback_1")
+    with (
+        mock.patch("gateway.forward.REGISTRY_DIR", self.registry_dir),
+        mock.patch("gateway.forward._is_process_running", return_value=True),
+        mock.patch("gateway.forward._watcher_active", False),
+        mock.patch("gateway.forward._observer", None),
+    ):
+      self.assertNotIn("db_fallback_1", _global_clients)
+      dbs = await list_available_databases()
+      self.assertIn("db_fallback_1", _global_clients)
+      db_ids = [d["database_id"] for d in dbs]
+      self.assertIn("db_fallback_1", db_ids)
+
+  async def test_available_databases_resource_scans_when_watcher_inactive(self):
+    """Test ida://databases resource connects new backends when inactive."""
+    await self._create_test_backend("db_fallback_2")
+    with (
+        mock.patch("gateway.forward.REGISTRY_DIR", self.registry_dir),
+        mock.patch("gateway.forward._is_process_running", return_value=True),
+        mock.patch("gateway.forward._watcher_active", False),
+        mock.patch("gateway.forward._observer", None),
+    ):
+      self.assertNotIn("db_fallback_2", _global_clients)
+      res_str = await available_databases()
+      self.assertIn("db_fallback_2", _global_clients)
+      res_data = json.loads(res_str)
+      db_ids = [d["database_id"] for d in res_data]
+      self.assertIn("db_fallback_2", db_ids)
+
+  async def test_list_available_databases_skips_scan_when_watcher_active(self):
+    """Test list_available_databases does not scan disk when watcher active."""
+    await self._create_test_backend("db_watcher_active")
+    with (
+        mock.patch("gateway.forward.REGISTRY_DIR", self.registry_dir),
+        mock.patch("gateway.forward._is_process_running", return_value=True),
+        mock.patch("gateway.forward._watcher_active", True),
+        mock.patch(
+            "gateway.forward._connect_unconnected_backends"
+        ) as mock_connect,
+    ):
+      with self.assertRaises(ToolError):
+        await list_available_databases()
+      mock_connect.assert_not_called()
+      self.assertNotIn("db_watcher_active", _global_clients)
+
+  def test_is_watcher_active_detects_dead_observer(self):
+    """Test _is_watcher_active returns False when observer thread dies."""
+    mock_obs = mock.Mock()
+    mock_obs.is_alive.return_value = False
+    with (
+        mock.patch("gateway.forward._watcher_active", True),
+        mock.patch("gateway.forward._observer", mock_obs),
+    ):
+      self.assertFalse(_is_watcher_active())

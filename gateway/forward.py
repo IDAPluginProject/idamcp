@@ -148,6 +148,17 @@ _backend_events: dict[str, asyncio.Event] = collections.defaultdict(
     asyncio.Event
 )
 _background_tasks: set[asyncio.Task] = set()
+_watcher_active: bool = False
+_observer: Observer | None = None
+_connect_lock: asyncio.Lock = asyncio.Lock()
+
+
+def _is_watcher_active() -> bool:
+  """Check if the filesystem watcher is active and running."""
+  global _watcher_active
+  if _watcher_active and _observer is not None and not _observer.is_alive():
+    _watcher_active = False
+  return _watcher_active
 
 
 def _create_background_task(coro) -> asyncio.Task:
@@ -413,12 +424,30 @@ class HeadlessManager:
 _headless_manager = HeadlessManager(CONFIG.get("max_headless_instances", 4))
 
 
+def _is_connected_to_pid(backend_id: str, pid: int | None) -> bool:
+  """Whether a live client for backend_id's process with this PID exists.
+
+  Call it under _global_client_state[backend_id].condition.
+  """
+  client = _global_clients.get(backend_id)
+  return (
+      client is not None
+      and not client.is_closed
+      and not _global_client_state[backend_id].is_closed
+      and _global_metadata.get(backend_id, {}).get("pid") == pid
+  )
+
+
 async def connect_to_backend(registry_file: pathlib.Path) -> None:
-  """Connect to a backend."""
+  """Connect to a backend.
+
+  Idempotent for a record whose PID we are already connected to: concurrent
+  calls for the same record (watcher event, initial scan, fallback scan,
+  spawn) end up with a single connection. A record with a different PID
+  replaces the existing connection.
+  """
   backend_id = registry_file.stem
   logging.info("[Gateway] connect_to_backend triggered for %s", backend_id)
-  if backend_id in _global_clients:
-    await disconnect_backend(backend_id)
 
   data = None
   try:
@@ -431,6 +460,8 @@ async def connect_to_backend(registry_file: pathlib.Path) -> None:
             data = json.loads(content)
     if not data:
       logging.error("[Gateway] Could not read registry file %s", registry_file)
+      if backend_id in _global_clients:
+        await disconnect_backend(backend_id)
       return
 
     channel = data.get("channel")
@@ -438,8 +469,21 @@ async def connect_to_backend(registry_file: pathlib.Path) -> None:
     pid = data.get("pid")
     if pid and not _is_process_running(pid):
       logging.info("Cleaning up stale registry file: %s", registry_file)
+      if backend_id in _global_clients:
+        await disconnect_backend(backend_id)
       _cleanup_stale_registry_file(registry_file, data)
       return
+
+    async with _global_client_state[backend_id].condition:
+      if _is_connected_to_pid(backend_id, pid):
+        logging.info(
+            "[Gateway] Already connected to backend %s (pid %s)",
+            backend_id,
+            pid,
+        )
+        return
+    if backend_id in _global_clients:
+      await disconnect_backend(backend_id)
 
     metadata = data.get("metadata", {})
     # Ensure database_id is present in the metadata
@@ -448,6 +492,15 @@ async def connect_to_backend(registry_file: pathlib.Path) -> None:
 
     client = RPCClient()
     async with _global_client_state[backend_id].condition:
+      # Another connect_to_backend for this record may have finished while
+      # we were waiting for the lock.
+      if _is_connected_to_pid(backend_id, pid):
+        logging.info(
+            "[Gateway] Backend %s (pid %s) was connected concurrently",
+            backend_id,
+            pid,
+        )
+        return
       # Retry connection logic
       for i in range(3):
         try:
@@ -750,15 +803,27 @@ for sig_name in ("SIGINT", "SIGTERM", "SIGBREAK"):
 async def lifespan(app):
   """Manage gateway lifespan."""
   del app
+  global _watcher_active, _observer
   REGISTRY_DIR.mkdir(parents=True, exist_ok=True)
+  observer = None
   try:
     loop = asyncio.get_running_loop()
-    observer = Observer()
-    logging.info("observing: %s", REGISTRY_DIR)
-    observer.schedule(
-        RegistryEventHandler(loop), str(REGISTRY_DIR), recursive=False
-    )
-    observer.start()
+    try:
+      observer = Observer()
+      logging.info("observing: %s", REGISTRY_DIR)
+      observer.schedule(
+          RegistryEventHandler(loop), str(REGISTRY_DIR), recursive=False
+      )
+      observer.start()
+      _watcher_active = True
+      _observer = observer
+    except Exception as e:  # pylint: disable=broad-exception-caught
+      logging.warning(
+          "Failed to start filesystem watcher for %s: %s", REGISTRY_DIR, e
+      )
+      observer = None
+      _observer = None
+      _watcher_active = False
 
     atexit.register(shutdown_clients)
     # Initial Scan
@@ -767,10 +832,14 @@ async def lifespan(app):
 
     yield
 
-    logging.info("stopping observer")
-    observer.stop()
-    observer.join()
+    if observer is not None:
+      logging.info("stopping observer")
+      with contextlib.suppress(Exception):
+        observer.stop()
+        observer.join()
   finally:
+    _observer = None
+    _watcher_active = False
     # Disconnect all clients
     await cleanup_logic()
 
@@ -888,6 +957,26 @@ def mcp_tool(func=None, *args, **kwargs):
   return decorator
 
 
+async def _connect_unconnected_backends() -> None:
+  """Scan registry directory for unconnected backends and connect to them."""
+  try:
+    if not REGISTRY_DIR.exists():
+      return
+    async with _connect_lock:
+      tasks = []
+      for registry_file in sorted(REGISTRY_DIR.glob("*.json")):
+        backend_id = registry_file.stem
+        client = _global_clients.get(backend_id)
+        if client is None or client.is_closed:
+          tasks.append(connect_to_backend(registry_file))
+      if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+  except Exception as e:  # pylint: disable=broad-exception-caught
+    logging.warning(
+        "Failed to scan for new backends in %s: %s", REGISTRY_DIR, e
+    )
+
+
 @mcp_tool
 async def list_available_databases() -> list[DatabaseInfo]:
   """List all available IDA database connection IDs.
@@ -895,6 +984,9 @@ async def list_available_databases() -> list[DatabaseInfo]:
   Active databases returned by this tool do not need to be opened again; they
   are ready to accept queries using their database_id.
   """
+  if not _is_watcher_active():
+    await _connect_unconnected_backends()
+
   available = []
   stale_ids = []
 
