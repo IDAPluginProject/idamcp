@@ -76,6 +76,25 @@ class TestInstallServer(unittest.TestCase):
     backups = list(settings_path.parent.glob("*.bak"))
     self.assertEqual(len(backups), 0)
 
+  def test_json_install_empty_file(self):
+    """Test installing server when config file exists but is empty."""
+    config_dir = self.home_path / ".gemini" / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    settings_path = config_dir / "mcp_config.json"
+
+    for initial_content in ("", "   \n\t\n", "\ufeff", "\ufeff  \n"):
+      settings_path.write_text(initial_content, encoding="utf-8")
+      with mock.patch("pathlib.Path.home", return_value=self.home_path):
+        install.install_server("agy")
+
+      with open(settings_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+      self.assertIn("mcpServers", data)
+      self.assertIn("idamcp", data["mcpServers"])
+
+      backups = list(config_dir.glob("*.bak"))
+      self.assertEqual(len(backups), 0)
+
   def test_json_install_existing_valid_file_creates_backup(self):
     """Test installing server when valid config exists creates a timestamped backup."""
     settings_dir = self.home_path / ".gemini"
@@ -140,6 +159,28 @@ class TestInstallServer(unittest.TestCase):
     with open(settings_path, "r") as f:
       data = json.load(f)
     self.assertEqual(data, ["item1", "item2"])
+
+  @unittest.skipIf(
+      tomllib is None or tomli_w is None, "tomllib or tomli_w not installed"
+  )
+  def test_codex_install_empty_file(self):
+    """Test installing server for Codex when config file exists but is empty."""
+    settings_dir = self.home_path / ".codex"
+    settings_dir.mkdir(parents=True, exist_ok=True)
+    settings_path = settings_dir / "config.toml"
+
+    for initial_content in ("", "   \n\t\n", "\ufeff", "\ufeff  \n"):
+      settings_path.write_text(initial_content, encoding="utf-8")
+      with mock.patch("pathlib.Path.home", return_value=self.home_path):
+        install.install_server("codex")
+
+      with open(settings_path, "rb") as f:
+        updated_data = tomllib.load(f)
+      self.assertIn("mcp_servers", updated_data)
+      self.assertIn("idamcp", updated_data["mcp_servers"])
+
+      backups = list(settings_dir.glob("*.bak"))
+      self.assertEqual(len(backups), 0)
 
   @unittest.skipIf(
       tomllib is None or tomli_w is None, "tomllib or tomli_w not installed"

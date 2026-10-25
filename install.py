@@ -147,7 +147,7 @@ def install(target_dir_arg: str | None = None) -> None:
 
   # 2. Determine Target Directory
   if target_dir_arg:
-    target_dir = pathlib.Path(target_dir_arg).resolve()
+    target_dir = pathlib.Path(target_dir_arg).expanduser().resolve()
   else:
     target_dir = get_default_target_dir()
 
@@ -167,7 +167,7 @@ def install(target_dir_arg: str | None = None) -> None:
       print("[-] Operation cancelled.")
       return
 
-    target_dir = user_path.resolve()
+    target_dir = user_path.expanduser().resolve()
 
     if not target_dir.exists():
       print(
@@ -267,8 +267,10 @@ def _write_json_mcp_config(
   settings = {}
   if settings_path.exists():
     try:
-      with open(settings_path, "r", encoding="utf-8") as f:
-        settings = json.load(f)
+      with open(settings_path, "r", encoding="utf-8-sig") as f:
+        content = f.read()
+      if content.strip():
+        settings = json.loads(content)
     except Exception as e:  # pylint: disable=broad-exception-caught
       print(
           "[x] Error: Failed to parse existing configuration at"
@@ -283,15 +285,18 @@ def _write_json_mcp_config(
       )
       return
 
-    # Make a backup with timestamp for the original configuration
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = settings_path.parent / f"{settings_path.name}.{timestamp}.bak"
-    try:
-      shutil.copy2(settings_path, backup_path)
-      print(f"[+] Backed up original configuration to: {backup_path}")
-    except Exception as e:  # pylint: disable=broad-exception-caught
-      print(f"[x] Error: Failed to create backup at {backup_path}: {e}")
-      return
+    if content.strip():
+      # Make a backup with timestamp for the original configuration
+      timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+      backup_path = (
+          settings_path.parent / f"{settings_path.name}.{timestamp}.bak"
+      )
+      try:
+        shutil.copy2(settings_path, backup_path)
+        print(f"[+] Backed up original configuration to: {backup_path}")
+      except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"[x] Error: Failed to create backup at {backup_path}: {e}")
+        return
   else:
     settings_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -337,6 +342,7 @@ def install_server(
   repo_dir = pathlib.Path(__file__).resolve().parent
   env_vars = {"PYTHONPATH": str(repo_dir)}
   if venv:
+    venv = str(pathlib.Path(venv).expanduser())
     env_vars["VIRTUAL_ENV"] = venv
   python_cmd = _resolve_python_executable(venv)
 
@@ -379,8 +385,10 @@ def install_server(
     settings = {}
     if settings_path.exists():
       try:
-        with open(settings_path, "rb") as f:
-          settings = tomllib.load(f)
+        with open(settings_path, "r", encoding="utf-8-sig") as f:
+          content = f.read()
+        if content.strip():
+          settings = tomllib.loads(content)
       except Exception as e:  # pylint: disable=broad-exception-caught
         print(
             "[x] Error: Failed to parse existing configuration at"
@@ -395,21 +403,24 @@ def install_server(
         )
         return
 
-      # Make a backup with timestamp for the original configuration
-      timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-      backup_path = (
-          settings_path.parent / f"{settings_path.name}.{timestamp}.bak"
-      )
-      try:
-        shutil.copy2(settings_path, backup_path)
-        print(f"[+] Backed up original configuration to: {backup_path}")
-      except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"[x] Error: Failed to create backup at {backup_path}: {e}")
-        return
+      if content.strip():
+        # Make a backup with timestamp for the original configuration
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = (
+            settings_path.parent / f"{settings_path.name}.{timestamp}.bak"
+        )
+        try:
+          shutil.copy2(settings_path, backup_path)
+          print(f"[+] Backed up original configuration to: {backup_path}")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+          print(f"[x] Error: Failed to create backup at {backup_path}: {e}")
+          return
     else:
       settings_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if "mcp_servers" not in settings:
+    if "mcp_servers" not in settings or not isinstance(
+        settings["mcp_servers"], dict
+    ):
       settings["mcp_servers"] = {}
 
     settings["mcp_servers"]["idamcp"] = {
