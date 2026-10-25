@@ -428,7 +428,7 @@ async def sql_query(
     - `SELECT name FROM sqlite_master WHERE type='table'`
     - `PRAGMA table_info('functions')`
   - **'xrefs' table:** Contains code and data cross-references between memory
-    addresses (excluding ordinary sequential instruction flow and type IDs).
+    addresses and type IDs (excluding ordinary sequential instruction flow).
     Reference types include `call`, `jmp`, `read`, `write`, and 'offset'. The
     `from_function_ea` column contains the start address of the
     function containing `from_ea` (or NULL if outside any function).

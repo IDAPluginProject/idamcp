@@ -749,6 +749,38 @@ class TestDBUpdateIDPHooks(unittest.TestCase):
     query._db_update_queue.task_done()
     self.assertEqual(event, ("cref_added", 0x1010, 0x2000, 17, 0x1000))
 
+  @mock.patch.object(query.helper, "get_func_bounds")
+  def test_ev_add_and_del_dref_enqueues_tid(self, mock_bounds):
+    mock_pfn = mock.MagicMock()
+    mock_pfn.start_ea = 0x1000
+    mock_bounds.return_value = mock_pfn
+    tid = 0xFF00000000000001
+    from_tid = 0xFF00000000000002
+
+    res = self.hooks.ev_add_dref(_from=0x1010, to=tid, xref_type=1)
+    self.assertEqual(res, 0)
+    self.assertEqual(
+        query._db_update_queue.get_nowait(),
+        ("dref_added", 0x1010, tid, 1, 0x1000),
+    )
+    query._db_update_queue.task_done()
+
+    res = self.hooks.ev_del_dref(_from=0x1010, to=tid)
+    self.assertEqual(res, 0)
+    self.assertEqual(
+        query._db_update_queue.get_nowait(),
+        ("dref_deleted", 0x1010, tid),
+    )
+    query._db_update_queue.task_done()
+
+    mock_bounds.reset_mock()
+    self.assertEqual(
+        self.hooks.ev_add_dref(_from=from_tid, to=tid, xref_type=1), 0
+    )
+    self.assertEqual(self.hooks.ev_del_dref(_from=from_tid, to=tid), 0)
+    self.assertTrue(query._db_update_queue.empty())
+    mock_bounds.assert_not_called()
+
 
 class TestSkipIfRebasing(unittest.TestCase):
   """Tests for the skip_if_rebasing decorator."""

@@ -282,8 +282,8 @@ def _get_stored_min_ea(conn: sqlite3.Connection) -> int | None:
 def _check_and_migrate_db(conn: sqlite3.Connection) -> None:
   """Checks user_version and image_min_ea; migrates (recreates) DB if outdated.
 
-  Version 6.0 (represented as integer 6) anchors the table schema.
-  If target_version is older than 6 or if the recorded image_min_ea has changed,
+  Version 7.0 (represented as integer 7) anchors the table schema.
+  If target_version is older than 7 or if the recorded image_min_ea has changed,
   all tables are dropped and re-created from scratch.
 
   Args:
@@ -294,7 +294,7 @@ def _check_and_migrate_db(conn: sqlite3.Connection) -> None:
     row = cursor.fetchone()
     current_version = row[0] if row else 0
 
-    target_version = 6
+    target_version = 7
     stored_min_ea = _get_stored_min_ea(conn)
 
     needs_migration = (
@@ -818,7 +818,7 @@ def populate_xrefs() -> None:
   def _gen():
     xb = ida_xref.xrefblk_t()
     flags = 0
-    for attr_name in ("XREF_FAR", "XREF_NOFLOW", "XREF_EA"):
+    for attr_name in ("XREF_FAR", "XREF_NOFLOW"):
       flags |= getattr(ida_xref, attr_name, 0)
 
     current_start = 0
@@ -841,23 +841,19 @@ def populate_xrefs() -> None:
           from_func_ea = None
 
       if xb.first_from(head, flags):
-        # In the newer version of IDA Pro, XREF_EA excludes the tid, but the
-        # older versions do not have the XREF_EA flag.
-        if not _is_tid(xb.to):
+        yield (
+            _to_signed_64(head),
+            _to_signed_64(xb.to),
+            _get_xref_type_name(xb.type),
+            from_func_ea,
+        )
+        while xb.next_from():
           yield (
               _to_signed_64(head),
               _to_signed_64(xb.to),
               _get_xref_type_name(xb.type),
               from_func_ea,
           )
-        while xb.next_from():
-          if not _is_tid(xb.to):
-            yield (
-                _to_signed_64(head),
-                _to_signed_64(xb.to),
-                _get_xref_type_name(xb.type),
-                from_func_ea,
-            )
 
   _recreate_and_insert(
       "xrefs",
@@ -1747,7 +1743,7 @@ class DBUpdateIDPHooks(ida_idp.IDP_Hooks):
       self, _from: int = 0, to: int = 0, xref_type: int = 0, *args: Any
   ) -> int:
     del args
-    if not _is_tid(to):
+    if not _is_tid(_from):
       bounds = helper.get_func_bounds(_from)
       from_function_ea = bounds.start_ea if bounds else None
       _db_update_queue.put(
@@ -1766,9 +1762,7 @@ class DBUpdateIDPHooks(ida_idp.IDP_Hooks):
   @skip_if_rebasing(default_return=0)
   def ev_del_dref(self, _from: int = 0, to: int = 0, *args: Any) -> int:
     del args
-    # Ignore TID references, we should not use helper.is_address_valid here
-    # because the image base may have changed.
-    if not _is_tid(to):
+    if not _is_tid(_from):
       _db_update_queue.put(("dref_deleted", _from, to))
     return 0
 

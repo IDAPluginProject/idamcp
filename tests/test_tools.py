@@ -991,6 +991,17 @@ hex(tid) if tid is not None else ""
     result_dec = await self.run_tool("get_xrefs_to", address=tid_dec)
     self.assertEqual(result_dec, result_hex)
 
+    # Verify xrefs table contains tid xrefs via sql_query
+    sql_res = await self.run_tool(
+        "sql_query", sql=f"SELECT * FROM xrefs WHERE to_ea = {tid_hex}"
+    )
+    self.assertIsInstance(sql_res, dict)
+    self.assertIn("rows", sql_res)
+    self.assertNotIn("error", sql_res)
+    sql_from_eas = {row["from_ea"] for row in sql_res["rows"]}
+    for address in golden_map:
+      self.assertIn(address, sql_from_eas)
+
   async def verify_get_callees(self):
     # Load golden data
     golden_path = os.path.join("tests", "golden_data.json")
@@ -3735,7 +3746,7 @@ print(f"REBASE RESULT: {rc}")
 
   async def verify_db_versioning_and_migration(self):
     """Verifies that DB version is set and database is migrated if version is old."""
-    # 1. Verify current version is 6 (target version)
+    # 1. Verify current version is 7 (target version)
     res_dict = await self.run_tool("sql_query", sql="PRAGMA user_version")
     self.assertIsInstance(res_dict, dict)
     self.assertIn("rows", res_dict)
@@ -3743,7 +3754,7 @@ print(f"REBASE RESULT: {rc}")
     res = res_dict["rows"]
     self.assertEqual(len(res), 1)
     self.assertIn("user_version", res[0])
-    self.assertEqual(res[0]["user_version"], "0x6")
+    self.assertEqual(res[0]["user_version"], "0x7")
 
     # Verify functions table exists and has data (triggered population)
     funcs_res = await self.run_tool(
@@ -3815,13 +3826,13 @@ print("DEBUG: Reset checked flag")
     ]:
       self.assertNotIn(ent, entity_names)
 
-    # Now verify version is back to 6
+    # Now verify version is back to 7
     res_dict = await self.run_tool("sql_query", sql="PRAGMA user_version")
     self.assertIsInstance(res_dict, dict)
     self.assertIn("rows", res_dict)
     self.assertNotIn("error", res_dict)
     res = res_dict["rows"]
-    self.assertEqual(res[0]["user_version"], "0x6")
+    self.assertEqual(res[0]["user_version"], "0x7")
 
     # Now query functions again, it should trigger re-population and succeed
     funcs_res = await self.run_tool(
