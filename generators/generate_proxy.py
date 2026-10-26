@@ -164,7 +164,7 @@ import argparse
 import contextlib
 import sys
 from typing import Annotated, Any, Dict, List, Literal
-from gateway.forward import forward_to, mcp_server, mcp_tool
+from gateway.forward import DatabaseId, forward_to, mcp_server, mcp_tool
 from shared.types import *
 
 try:
@@ -265,12 +265,7 @@ def main():
       prototype_part1, prototype_part2 = item[
           'prototype_without_decorator'
       ].split('(', maxsplit=1)
-      instance_str = (
-          'database_id: Annotated[str, "The unique identifier for the target'
-          ' IDA database. You can obtain this ID by calling'
-          ' list_available_databases, reading the ida://databases resource, or'
-          ' by opening a new database via idalib_headless_open."], '
-      )
+      instance_str = 'database_id: DatabaseId, '
 
       prototype = prototype_part1 + '(' + instance_str + prototype_part2
 

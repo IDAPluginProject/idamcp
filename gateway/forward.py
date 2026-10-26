@@ -40,6 +40,7 @@ from fastmcp.exceptions import ToolError
 from fastmcp.server.transforms.search import BM25SearchTransform
 from fastmcp.server.transforms.search import serialize_tools_for_output_markdown
 from fastmcp.tools import Tool
+from pydantic import AliasChoices
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
@@ -125,6 +126,24 @@ class DatabaseInfo(Metadata):
   busy: NotRequired[
       Annotated[bool, "Whether the database is currently busy executing a tool"]
   ]
+
+
+DATABASE_ID_ALIASES = AliasChoices(
+    "database_id", "database", "db", "db_id", "id"
+)
+
+DatabaseId = Annotated[
+    str,
+    Field(
+        validation_alias=DATABASE_ID_ALIASES,
+        description=(
+            "The unique identifier for the target IDA database. You can obtain"
+            " this ID by calling list_available_databases, reading the"
+            " ida://databases resource, or by opening a new database via"
+            " idalib_headless_open."
+        ),
+    ),
+]
 
 
 class ClientState(BaseModel):
@@ -1101,7 +1120,9 @@ async def idalib_headless_open(
 
 
 @mcp_tool
-async def idalib_headless_close(database_id: str) -> None:
+async def idalib_headless_close(
+    database_id: Annotated[str, Field(validation_alias=DATABASE_ID_ALIASES)],
+) -> None:
   """Close a headless IDA instance."""
   # Only close the database opened by us and not already closed.
   if (

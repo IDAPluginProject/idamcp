@@ -23,7 +23,7 @@ import argparse
 import contextlib
 import sys
 from typing import Annotated, Any, Dict, List, Literal
-from gateway.forward import forward_to, mcp_server, mcp_tool
+from gateway.forward import DatabaseId, forward_to, mcp_server, mcp_tool
 from shared.types import *
 
 try:
@@ -51,12 +51,7 @@ except ImportError as e:
 
 @mcp_tool
 async def get_xrefs_from(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to get cross-references from"],
 ) -> list[Xref]:
   """Retrieves all cross-references originating from a specific address."""
@@ -65,12 +60,7 @@ async def get_xrefs_from(
 
 @mcp_tool
 async def decompile_function(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function to decompile"],
     include_line_prefix: Annotated[
         bool,
@@ -84,12 +74,7 @@ async def decompile_function(
 
 @mcp_tool
 async def disassemble_code(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to disassemble code"],
     count: Annotated[int, "Number of instructions to disassemble"] = 1,
     include_bytes: Annotated[
@@ -111,12 +96,7 @@ async def disassemble_code(
 
 @mcp_tool
 async def get_ida_view(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     start_ea: Annotated[str, "Start address of the view"],
     end_ea: Annotated[str, "End address of the view"],
     include_bytes: Annotated[
@@ -136,12 +116,7 @@ async def get_ida_view(
 
 @mcp_tool
 async def disassemble_function(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function to disassemble"],
     include_bytes: Annotated[
         bool, "Whether to include opcode bytes in the disassembly output"
@@ -153,12 +128,7 @@ async def disassemble_function(
 
 @mcp_tool
 async def get_xrefs_to(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to get cross references to"],
 ) -> list[Xref]:
   """Get all cross references to the given address."""
@@ -167,12 +137,7 @@ async def get_xrefs_to(
 
 @mcp_tool
 async def get_xrefs_to_field(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     struct_name: Annotated[
         str, "Name of the struct (type) containing the field"
     ],
@@ -184,12 +149,7 @@ async def get_xrefs_to_field(
 
 @mcp_tool
 async def get_callees(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function to get callee functions"],
 ) -> list[Function]:
   """Get all callees of a function."""
@@ -198,12 +158,7 @@ async def get_callees(
 
 @mcp_tool
 async def get_callers(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function to get callers"],
 ) -> list[Caller]:
   """Get all callers of the given address."""
@@ -212,12 +167,7 @@ async def get_callers(
 
 @mcp_tool
 async def get_entry_points(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> list[Function]:
   """Get all entry points in the database."""
   return await forward_to(database_id, "get_entry_points", locals())
@@ -225,12 +175,7 @@ async def get_entry_points(
 
 @mcp_tool
 async def get_start_ea(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> str:
   """Get the start entry point of the binary."""
   return await forward_to(database_id, "get_start_ea", locals())
@@ -238,12 +183,7 @@ async def get_start_ea(
 
 @mcp_tool
 async def get_call_graph_from(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function to start from"],
     depth: Annotated[int, "Traversal depth"] = 2,
     max_nodes: Annotated[int, "Maximum number of nodes to return"] = 50,
@@ -254,12 +194,7 @@ async def get_call_graph_from(
 
 @mcp_tool
 async def get_call_graph_to(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function to start from"],
     depth: Annotated[int, "Traversal depth"] = 2,
     max_nodes: Annotated[int, "Maximum number of nodes to return"] = 50,
@@ -270,12 +205,7 @@ async def get_call_graph_to(
 
 @mcp_tool
 async def get_call_graph_between(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     start_ea: Annotated[str, "Address of the start function"],
     end_ea: Annotated[str, "Address of the destination function"],
     max_depth: Annotated[int, "Maximum call depth"] = 5,
@@ -287,12 +217,7 @@ async def get_call_graph_between(
 
 @mcp_tool
 async def get_function_cfg(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function to analyze"],
 ) -> ControlFlowGraph:
   """Get the Control Flow Graph (CFG) of a function."""
@@ -301,12 +226,7 @@ async def get_function_cfg(
 
 @mcp_tool
 async def search_binary(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     pattern: Annotated[
         str, "Hex pattern to search for (e.g. '55 8B EC' or '55 8B ??')"
     ],
@@ -360,12 +280,7 @@ async def search_binary(
 
 @mcp_tool
 async def search_text(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     text: Annotated[str, "Text to search for"],
     start_ea: Annotated[
         str | None,
@@ -422,12 +337,7 @@ async def search_text(
 
 @mcp_tool
 async def undefine(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to undefine"],
     size: Annotated[int, "Number of bytes to undefine"] = 1,
 ) -> str:
@@ -437,12 +347,7 @@ async def undefine(
 
 @mcp_tool
 async def make_code(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to convert to instructions"],
 ) -> str:
   """Convert raw bytes to instructions at an address (GUI: 'C').
@@ -455,12 +360,7 @@ async def make_code(
 
 @mcp_tool
 async def make_function(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to define function"],
 ) -> str:
   """Define a function at a code location (GUI: 'P').
@@ -474,12 +374,7 @@ async def make_function(
 
 @mcp_tool
 async def get_data_xrefs_from(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to get data xrefs from"],
 ) -> list[str]:
   """Retrieve the addresses pointed to by the data at a specific location."""
@@ -488,12 +383,7 @@ async def get_data_xrefs_from(
 
 @mcp_tool
 async def dbg_get_all_registers_for_all_threads(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> list[ThreadRegisters]:
   """Get all registers and their values.
 
@@ -506,12 +396,7 @@ async def dbg_get_all_registers_for_all_threads(
 
 @mcp_tool
 async def dbg_get_all_registers_for_thread(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     thread_id: Annotated[int, "ID of the thread to get registers for"],
 ) -> ThreadRegisters:
   """Get registers and their values for a specific thread."""
@@ -522,12 +407,7 @@ async def dbg_get_all_registers_for_thread(
 
 @mcp_tool
 async def dbg_get_all_registers_for_current_thread(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> ThreadRegisters:
   """Get registers for the current thread."""
   return await forward_to(
@@ -537,12 +417,7 @@ async def dbg_get_all_registers_for_current_thread(
 
 @mcp_tool
 async def dbg_get_registers_for_thread(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     thread_id: Annotated[int, "ID of the thread to get specific registers for"],
     register_names: Annotated[
         str, "A comma-separated list of register names to retrieve"
@@ -554,12 +429,7 @@ async def dbg_get_registers_for_thread(
 
 @mcp_tool
 async def dbg_get_registers_for_current_thread(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     register_names: Annotated[
         str, "A comma-separated list of register names to retrieve"
     ],
@@ -572,12 +442,7 @@ async def dbg_get_registers_for_current_thread(
 
 @mcp_tool
 async def dbg_get_call_stack(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> list[dict[str, str]]:
   """Get the current call stack."""
   return await forward_to(database_id, "dbg_get_call_stack", locals())
@@ -585,12 +450,7 @@ async def dbg_get_call_stack(
 
 @mcp_tool
 async def dbg_list_breakpoints(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ):
   """List all breakpoints in the program."""
   return await forward_to(database_id, "dbg_list_breakpoints", locals())
@@ -598,12 +458,7 @@ async def dbg_list_breakpoints(
 
 @mcp_tool
 async def dbg_start_process(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ):
   """Start the debugger, returns the current instruction pointer."""
   return await forward_to(database_id, "dbg_start_process", locals())
@@ -611,12 +466,7 @@ async def dbg_start_process(
 
 @mcp_tool
 async def dbg_exit_process(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ):
   """Exit the debugger."""
   return await forward_to(database_id, "dbg_exit_process", locals())
@@ -624,12 +474,7 @@ async def dbg_exit_process(
 
 @mcp_tool
 async def dbg_continue_process(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> str:
   """Continue the debugger, returns the current instruction pointer."""
   return await forward_to(database_id, "dbg_continue_process", locals())
@@ -637,12 +482,7 @@ async def dbg_continue_process(
 
 @mcp_tool
 async def dbg_run_to(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Run the debugger to the specified address"],
 ):
   """Run the debugger to the specified address."""
@@ -651,12 +491,7 @@ async def dbg_run_to(
 
 @mcp_tool
 async def dbg_set_breakpoint(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Set a breakpoint at the specified address"],
 ):
   """Set a breakpoint at the specified address."""
@@ -665,12 +500,7 @@ async def dbg_set_breakpoint(
 
 @mcp_tool
 async def dbg_step_into(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ):
   """Step into the current instruction."""
   return await forward_to(database_id, "dbg_step_into", locals())
@@ -678,12 +508,7 @@ async def dbg_step_into(
 
 @mcp_tool
 async def dbg_step_over(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ):
   """Step over the current instruction."""
   return await forward_to(database_id, "dbg_step_over", locals())
@@ -691,12 +516,7 @@ async def dbg_step_over(
 
 @mcp_tool
 async def dbg_delete_breakpoint(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "del a breakpoint at the specified address"],
 ):
   """Delete a breakpoint at the specified address."""
@@ -705,12 +525,7 @@ async def dbg_delete_breakpoint(
 
 @mcp_tool
 async def dbg_enable_breakpoint(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[
         str, "Enable or disable a breakpoint at the specified address"
     ],
@@ -722,12 +537,7 @@ async def dbg_enable_breakpoint(
 
 @mcp_tool
 async def jump_to_address(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "The target address to jump to"],
 ) -> str:
   """Navigates the IDA UI (IDA View/Pseudocode) to the specified address."""
@@ -736,12 +546,7 @@ async def jump_to_address(
 
 @mcp_tool
 async def set_colors(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     reqs: Annotated[List[SetColorRequest], "List of color setting requests"],
 ) -> str:
   """Sets the background color of items at specified addresses."""
@@ -750,12 +555,7 @@ async def set_colors(
 
 @mcp_tool
 async def set_comment(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to set the comment for"],
     comment: Annotated[str, "Comment text"],
 ) -> SetCommentResult:
@@ -779,12 +579,7 @@ async def set_comment(
 
 @mcp_tool
 async def rename_local_variables(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function containing the variables"],
     renames: Annotated[
         List[LocalVariableRename], "List of variable renames to apply"
@@ -796,12 +591,7 @@ async def rename_local_variables(
 
 @mcp_tool
 async def rename_addresses(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     reqs: Annotated[
         List[RenameAddressRequest], "List of requests of address renaming"
     ],
@@ -812,12 +602,7 @@ async def rename_addresses(
 
 @mcp_tool
 async def set_local_variable_types(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function containing the variables"],
     type_changes: Annotated[
         List[LocalVariableTypeChange], "List of variable type changes to apply"
@@ -829,12 +614,7 @@ async def set_local_variable_types(
 
 @mcp_tool
 async def rename_stack_frame_variables(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function containing the variables"],
     renames: Annotated[
         List[StackFrameVariableRename], "List of variable renames"
@@ -846,12 +626,7 @@ async def rename_stack_frame_variables(
 
 @mcp_tool
 async def create_stack_frame_variables(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function containing the variables"],
     creations: Annotated[
         List[StackFrameVariableCreate], "List of variable creations"
@@ -863,12 +638,7 @@ async def create_stack_frame_variables(
 
 @mcp_tool
 async def set_stack_frame_variable_types(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[
         str, "The hex address of the target function, e.g. '0x40000'"
     ],
@@ -884,12 +654,7 @@ async def set_stack_frame_variable_types(
 
 @mcp_tool
 async def delete_stack_frame_variables(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[
         str, "The hex address of the target function, e.g. '0x40000'"
     ],
@@ -901,12 +666,7 @@ async def delete_stack_frame_variables(
 
 @mcp_tool
 async def set_functions_noret(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function"],
     is_noret: Annotated[bool, "True to mark as non-returning, False otherwise"],
 ) -> str:
@@ -916,12 +676,7 @@ async def set_functions_noret(
 
 @mcp_tool
 async def set_types(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     reqs: Annotated[List[SetTypeRequest], "List of set type requests"],
 ) -> str:
   """Set type of functions/variables."""
@@ -930,12 +685,7 @@ async def set_types(
 
 @mcp_tool
 async def add_entry_points(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     reqs: Annotated[
         List[AddEntryPointRequest], "List of add entry point requests"
     ],
@@ -946,12 +696,7 @@ async def add_entry_points(
 
 @mcp_tool
 async def patch_bytes(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     reqs: Annotated[List[PatchBytesRequest], "List of patch bytes requests"],
 ) -> str:
   """Patch bytes directly in memory."""
@@ -960,12 +705,7 @@ async def patch_bytes(
 
 @mcp_tool
 async def apply_enums_to_operands(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the instruction"],
     op_index: Annotated[int, "Operand index (0-based)"],
     enum_name: Annotated[str, "Name of the enum to apply"],
@@ -976,12 +716,7 @@ async def apply_enums_to_operands(
 
 @mcp_tool
 async def convert_to_offsets(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     reqs: Annotated[
         List[ConvertToOffsetRequest], "List of convert to offset requests"
     ],
@@ -992,12 +727,7 @@ async def convert_to_offsets(
 
 @mcp_tool
 async def make_data_batch(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     reqs: Annotated[List[MakeDataRequest], "List of make data requests"],
 ) -> str:
   """Convert the current item to a primitive data type (byte, word, etc.)."""
@@ -1006,12 +736,7 @@ async def make_data_batch(
 
 @mcp_tool
 async def make_structs(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to create structure instance at"],
     struct_name: Annotated[str, "Name of the structure type"],
     size: Annotated[
@@ -1025,12 +750,7 @@ async def make_structs(
 
 @mcp_tool
 async def make_strings(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     start_ea: Annotated[str, "Address to create string at"],
     end_ea: Annotated[
         str,
@@ -1046,12 +766,7 @@ async def make_strings(
 
 @mcp_tool
 async def make_arrays(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to create array at"],
     count: Annotated[int, "Number of items in the array"],
 ) -> str:
@@ -1061,12 +776,7 @@ async def make_arrays(
 
 @mcp_tool
 async def idapython_eval(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     code: Annotated[str, "Python code to execute"],
     persist_globals: Annotated[
         bool,
@@ -1097,12 +807,7 @@ async def idapython_eval(
 
 @mcp_tool
 async def export_file(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     file_type: Annotated[
         Literal["map", "exe", "idc", "lst", "asm", "dif", "c"],
         "Output file type: map, exe, idc, lst, asm, dif, c",
@@ -1126,12 +831,7 @@ async def export_file(
 
 @mcp_tool
 async def get_comment(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to retrieve the comment from"],
 ) -> str:
   """Retrieves the comment associated with a specific address."""
@@ -1140,12 +840,7 @@ async def get_comment(
 
 @mcp_tool
 async def get_metadata(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> Metadata:
   """Get metadata about the current IDB."""
   return await forward_to(database_id, "get_metadata", locals())
@@ -1153,12 +848,7 @@ async def get_metadata(
 
 @mcp_tool
 async def get_function_by_address(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the function to get"],
 ) -> Function:
   """Get a function by its address."""
@@ -1167,12 +857,7 @@ async def get_function_by_address(
 
 @mcp_tool
 async def get_current_address(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> str:
   """Get the address currently selected by the user."""
   return await forward_to(database_id, "get_current_address", locals())
@@ -1180,12 +865,7 @@ async def get_current_address(
 
 @mcp_tool
 async def get_current_function(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> Function | str:
   """Get the function currently selected by the user."""
   return await forward_to(database_id, "get_current_function", locals())
@@ -1193,12 +873,7 @@ async def get_current_function(
 
 @mcp_tool
 async def get_basic_block(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address inside the basic block"],
 ) -> BasicBlock | str:
   """Get the basic block containing the specified address."""
@@ -1207,12 +882,7 @@ async def get_basic_block(
 
 @mcp_tool
 async def get_function_flags(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to check"],
 ) -> list[FunctionFlags]:
   """Check if the address belongs to a library function (FLIRT)."""
@@ -1221,12 +891,7 @@ async def get_function_flags(
 
 @mcp_tool
 async def list_functions(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     offset: Annotated[int, "Offset to start listing from (start at 0)"] = 0,
     count: Annotated[
         int,
@@ -1246,12 +911,7 @@ async def list_functions(
 
 @mcp_tool
 async def list_globals(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     offset: Annotated[int, "Offset to start listing from (start at 0)"] = 0,
     count: Annotated[
         int,
@@ -1274,12 +934,7 @@ async def list_globals(
 
 @mcp_tool
 async def list_imports(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     offset: Annotated[int, "Offset to start listing from (start at 0)"] = 0,
     count: Annotated[
         int,
@@ -1292,12 +947,7 @@ async def list_imports(
 
 @mcp_tool
 async def list_strings(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     offset: Annotated[int, "Offset to start listing from (start at 0)"] = 0,
     count: Annotated[
         int,
@@ -1316,12 +966,7 @@ async def list_strings(
 
 @mcp_tool
 async def list_segments(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> list[Segment]:
   """List all segments in the binary."""
   return await forward_to(database_id, "list_segments", locals())
@@ -1329,12 +974,7 @@ async def list_segments(
 
 @mcp_tool
 async def list_local_types(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     name_pattern: Annotated[
         str | None,
         "A regular expression used to filter the list (matching is always "
@@ -1348,12 +988,7 @@ async def list_local_types(
 
 @mcp_tool
 async def list_patched_bytes(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> list[PatchedByte]:
   """List all patched bytes in the database."""
   return await forward_to(database_id, "list_patched_bytes", locals())
@@ -1361,12 +996,7 @@ async def list_patched_bytes(
 
 @mcp_tool
 async def list_bookmarks(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
 ) -> list[Bookmark]:
   """List all bookmarks in the database."""
   return await forward_to(database_id, "list_bookmarks", locals())
@@ -1374,12 +1004,7 @@ async def list_bookmarks(
 
 @mcp_tool
 async def get_operand(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address of the instruction"],
     op_index: Annotated[int, "Operand index (0-based)"],
 ) -> Operand:
@@ -1389,12 +1014,7 @@ async def get_operand(
 
 @mcp_tool
 async def get_global_variable_value_by_name(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     reqs: Annotated[List[str], "List of names of global variables"],
 ) -> List[BatchResponseItem]:
   """Read global variables' values (if known at compile-time).
@@ -1408,12 +1028,7 @@ async def get_global_variable_value_by_name(
 
 @mcp_tool
 async def get_global_variable_value_at_address(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     reqs: Annotated[List[str], "List of addresses of global variables"],
 ) -> List[BatchResponseItem]:
   """Read global variables' values by their addresses (if known at compile-time).
@@ -1427,12 +1042,7 @@ async def get_global_variable_value_at_address(
 
 @mcp_tool
 async def read_data(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     reqs: Annotated[List[ReadDataRequest], "List of read data requests"],
 ) -> List[BatchResponseItem]:
   """Read formatted data from memory at given addresses."""
@@ -1441,12 +1051,7 @@ async def read_data(
 
 @mcp_tool
 async def hexdump(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address (e.g., '0x400000') to start the hexdump"],
     length: Annotated[
         int, "Length of the memory region to dump in bytes, max 0x1000 per call"
@@ -1463,12 +1068,7 @@ async def hexdump(
 
 @mcp_tool
 async def list_enums(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     name_pattern: Annotated[
         str,
         "Optional case-insensitive regular expression pattern to match"
@@ -1485,12 +1085,7 @@ async def list_enums(
 
 @mcp_tool
 async def declare_type(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     c_decl: Annotated[
         str,
         (
@@ -1505,12 +1100,7 @@ async def declare_type(
 
 @mcp_tool
 async def list_structs(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     name_pattern: Annotated[
         str,
         "Optional case-insensitive regular expression pattern to match"
@@ -1526,12 +1116,7 @@ async def list_structs(
 
 @mcp_tool
 async def get_struct_at_address(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[str, "Address to analyze structure at"],
     struct_name: Annotated[str, "Name of the structure"],
 ) -> dict[str, Any]:
@@ -1541,12 +1126,7 @@ async def get_struct_at_address(
 
 @mcp_tool
 async def get_stack_frame_variables(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     address: Annotated[
         str,
         (

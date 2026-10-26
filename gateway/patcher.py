@@ -27,6 +27,7 @@ import re
 import sys
 from typing import Annotated, List, Tuple
 
+from gateway.forward import DatabaseId
 from gateway.forward import forward_to
 from gateway.forward import mcp_tool
 from keystone import (
@@ -316,12 +317,7 @@ def fix_ida_syntax(assembly: str, arch: int, mode: int) -> str:
 
 @mcp_tool
 async def patch_assembly(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     reqs: Annotated[
         List[PatchAssemblyRequest],
         "List of patch addresses assembles requests",

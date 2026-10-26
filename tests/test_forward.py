@@ -652,3 +652,89 @@ class TestWatcherFallback(unittest.IsolatedAsyncioTestCase):
         mock.patch("gateway.forward._observer", mock_obs),
     ):
       self.assertFalse(_is_watcher_active())
+
+
+_DATABASE_ID_KEYS = ("database_id", "database", "db", "db_id", "id")
+
+
+class TestParameterAliases(unittest.IsolatedAsyncioTestCase):
+  """Tests that tools accept aliases for database_id and sql."""
+
+  async def asyncSetUp(self):
+    # pylint: disable=g-import-not-at-top
+    import gateway.patcher  # pylint: disable=unused-import
+    import gateway.proxy  # pylint: disable=unused-import
+    import gateway.query  # pylint: disable=unused-import
+
+    # pylint: enable=g-import-not-at-top
+    self.mcp_server = forward.mcp_server
+
+  async def test_sql_query_accepts_aliases(self):
+    """Test sql_query binds every database_id and sql alias."""
+    with mock.patch(
+        "gateway.query.forward_to",
+        new_callable=mock.AsyncMock,
+        return_value=[{"rows": []}],
+    ) as mock_forward:
+      for db_key in _DATABASE_ID_KEYS:
+        for sql_key in ("sql", "query"):
+          with self.subTest(db_key=db_key, sql_key=sql_key):
+            mock_forward.reset_mock()
+            await self.mcp_server.call_tool(
+                "sql_query", {db_key: "db1", sql_key: "SELECT 1"}
+            )
+            mock_forward.assert_awaited_once()
+            self.assertEqual(mock_forward.await_args.args[0], "db1")
+            self.assertEqual(mock_forward.await_args.args[1], "sql_query")
+
+  async def test_proxied_tool_accepts_database_id_aliases(self):
+    """Test a generated proxy tool binds every database_id alias."""
+    with mock.patch(
+        "gateway.proxy.forward_to",
+        new_callable=mock.AsyncMock,
+        return_value="int main() {}",
+    ) as mock_forward:
+      for db_key in _DATABASE_ID_KEYS:
+        with self.subTest(db_key=db_key):
+          mock_forward.reset_mock()
+          await self.mcp_server.call_tool(
+              "decompile_function", {db_key: "db1", "address": "0x1000"}
+          )
+          target, tool_name, args = mock_forward.await_args.args
+          self.assertEqual(target, "db1")
+          self.assertEqual(tool_name, "decompile_function")
+          self.assertEqual(args["database_id"], "db1")
+          self.assertEqual(
+              set(args), {"database_id", "address", "include_line_prefix"}
+          )
+
+  async def test_patch_assembly_accepts_database_id_aliases(self):
+    """Test patch_assembly binds every database_id alias."""
+    with mock.patch(
+        "gateway.patcher.forward_to",
+        new_callable=mock.AsyncMock,
+        return_value=[],
+    ) as mock_forward:
+      for db_key in _DATABASE_ID_KEYS:
+        with self.subTest(db_key=db_key):
+          mock_forward.reset_mock()
+          await self.mcp_server.call_tool(
+              "patch_assembly", {db_key: "db1", "reqs": []}
+          )
+          self.assertEqual(mock_forward.await_args.args[0], "db1")
+
+  async def test_idalib_headless_close_accepts_database_id_aliases(self):
+    """Test idalib_headless_close binds every database_id alias."""
+    for db_key in _DATABASE_ID_KEYS:
+      with self.subTest(db_key=db_key):
+        _global_database_id_to_pid["db1"] = 1001
+        _global_client_state["db1"].is_closed = False
+        with mock.patch.object(
+            _headless_manager, "close", new_callable=mock.AsyncMock
+        ) as mock_close:
+          await self.mcp_server.call_tool(
+              "idalib_headless_close", {db_key: "db1"}
+          )
+          mock_close.assert_awaited_once_with("db1")
+    _global_database_id_to_pid.clear()
+    _global_client_state.clear()

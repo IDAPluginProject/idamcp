@@ -24,8 +24,11 @@ import logging
 import traceback
 from typing import Annotated, Any, List, Union
 
+from gateway.forward import DatabaseId
 from gateway.forward import forward_to
 from gateway.forward import mcp_tool
+from pydantic import AliasChoices
+from pydantic import Field
 from shared.types import QueryResult
 import sqlglot
 from sqlglot import exp
@@ -370,16 +373,16 @@ def _to_query_result(res: dict[str, Any]) -> QueryResult:
 
 @mcp_tool
 async def sql_query(
-    database_id: Annotated[
-        str,
-        "The unique identifier for the target IDA database. You can obtain this"
-        " ID by calling list_available_databases, reading the ida://databases"
-        " resource, or by opening a new database via idalib_headless_open.",
-    ],
+    database_id: DatabaseId,
     sql: Annotated[
         Union[List[str], str],
-        "SQL query or queries to execute. Supports multiple queries (in a list"
-        + " or separated by ';').",
+        Field(
+            validation_alias=AliasChoices("sql", "query"),
+            description=(
+                "SQL query or queries to execute. Supports multiple queries"
+                " (in a list or separated by ';')."
+            ),
+        ),
     ],
 ) -> Union[QueryResult, List[QueryResult]]:
   """Executes read-only SQL queries against IDA Pro using SQLite.
