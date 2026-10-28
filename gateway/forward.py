@@ -1085,7 +1085,20 @@ async def available_databases() -> str:
 
 @mcp_tool
 async def idalib_headless_open(
-    path: Annotated[str, "Path to the target binary or database"],
+    path: Annotated[
+        str,
+        Field(
+            validation_alias=AliasChoices(
+                "path",
+                "idb_path",
+                "file_path",
+                "input_path",
+                "filepath",
+                "file",
+            ),
+            description="Path to the target binary or database",
+        ),
+    ],
     processor: Annotated[
         str | None,
         "Optional IDA processor module (IDA's -p), e.g. 'metapc', 'arm',"

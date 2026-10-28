@@ -43,10 +43,12 @@ import idaapi
 import idautils
 import idc
 from shared.rpc import ToolError
+from shared.types import Address
 from shared.types import AssemblyContextItem
 from shared.types import AssemblyContextRequest
 from shared.types import BasicBlock
 from shared.types import Bookmark
+from shared.types import Field
 from shared.types import Function
 from shared.types import FunctionFlags
 from shared.types import Global
@@ -104,7 +106,9 @@ def _get_file_type_desc() -> str:
 @jsonrpc
 @idaread
 def get_comment(
-    address: Annotated[str, "Address to retrieve the comment from"],
+    address: Annotated[
+        Address, Field(description="Address to retrieve the comment from")
+    ],
 ) -> str:
   """Retrieves the comment associated with a specific address."""
   ea = helper.parse_and_check_ea(address)
@@ -173,7 +177,9 @@ def get_metadata() -> Metadata:
 @jsonrpc
 @idaread
 def get_function_by_address(
-    address: Annotated[str, "Address of the function to get"],
+    address: Annotated[
+        Address, Field(description="Address of the function to get")
+    ],
 ) -> Function:
   """Get a function by its address."""
   return helper.get_function(helper.parse_and_check_ea(address))
@@ -202,7 +208,9 @@ def get_current_function() -> Function | str:
 @jsonrpc
 @idaread
 def get_basic_block(
-    address: Annotated[str, "Address inside the basic block"],
+    address: Annotated[
+        Address, Field(description="Address inside the basic block")
+    ],
 ) -> BasicBlock | str:
   """Get the basic block containing the specified address."""
   ea = helper.parse_and_check_ea(address)
@@ -385,7 +393,7 @@ _FUNCTION_FLAG_DESCS = {
 @jsonrpc
 @idaread
 def get_function_flags(
-    address: Annotated[str, "Address to check"],
+    address: Annotated[Address, Field(description="Address to check")],
 ) -> list[FunctionFlags]:
   """Check if the address belongs to a library function (FLIRT)."""
   ea = helper.parse_and_check_ea(address)
@@ -869,7 +877,9 @@ _OPERAND_TYPE_DESCRIPTIONS = {
 @jsonrpc
 @idaread
 def get_operand(
-    address: Annotated[str, "Address of the instruction"],
+    address: Annotated[
+        Address, Field(description="Address of the instruction")
+    ],
     op_index: Annotated[int, "Operand index (0-based)"],
 ) -> Operand:
   """Get the operand of an instruction."""

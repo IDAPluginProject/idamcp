@@ -655,10 +655,11 @@ class TestWatcherFallback(unittest.IsolatedAsyncioTestCase):
 
 
 _DATABASE_ID_KEYS = ("database_id", "database", "db", "db_id", "id")
+_ADDRESS_KEYS = ("address", "ea", "addr")
 
 
 class TestParameterAliases(unittest.IsolatedAsyncioTestCase):
-  """Tests that tools accept aliases for database_id and sql."""
+  """Tests that tools accept parameter aliases."""
 
   async def asyncSetUp(self):
     # pylint: disable=g-import-not-at-top
@@ -687,26 +688,28 @@ class TestParameterAliases(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(mock_forward.await_args.args[0], "db1")
             self.assertEqual(mock_forward.await_args.args[1], "sql_query")
 
-  async def test_proxied_tool_accepts_database_id_aliases(self):
-    """Test a generated proxy tool binds every database_id alias."""
+  async def test_proxied_tool_accepts_database_id_and_address_aliases(self):
+    """Test a generated proxy tool binds every database_id and address alias."""
     with mock.patch(
         "gateway.proxy.forward_to",
         new_callable=mock.AsyncMock,
         return_value="int main() {}",
     ) as mock_forward:
       for db_key in _DATABASE_ID_KEYS:
-        with self.subTest(db_key=db_key):
-          mock_forward.reset_mock()
-          await self.mcp_server.call_tool(
-              "decompile_function", {db_key: "db1", "address": "0x1000"}
-          )
-          target, tool_name, args = mock_forward.await_args.args
-          self.assertEqual(target, "db1")
-          self.assertEqual(tool_name, "decompile_function")
-          self.assertEqual(args["database_id"], "db1")
-          self.assertEqual(
-              set(args), {"database_id", "address", "include_line_prefix"}
-          )
+        for addr_key in _ADDRESS_KEYS:
+          with self.subTest(db_key=db_key, addr_key=addr_key):
+            mock_forward.reset_mock()
+            await self.mcp_server.call_tool(
+                "decompile_function", {db_key: "db1", addr_key: "0x1000"}
+            )
+            target, tool_name, args = mock_forward.await_args.args
+            self.assertEqual(target, "db1")
+            self.assertEqual(tool_name, "decompile_function")
+            self.assertEqual(args["database_id"], "db1")
+            self.assertEqual(args["address"], "0x1000")
+            self.assertEqual(
+                set(args), {"database_id", "address", "include_line_prefix"}
+            )
 
   async def test_patch_assembly_accepts_database_id_aliases(self):
     """Test patch_assembly binds every database_id alias."""
@@ -738,3 +741,123 @@ class TestParameterAliases(unittest.IsolatedAsyncioTestCase):
           mock_close.assert_awaited_once_with("db1")
     _global_database_id_to_pid.clear()
     _global_client_state.clear()
+
+  async def test_idalib_headless_open_accepts_path_aliases(self):
+    """Test idalib_headless_open binds every path alias."""
+    fake_info = {
+        "database_id": "db1",
+        "pid": 1001,
+        "filepath": "/tmp/test.bin",
+        "database_path": "/tmp/test.bin.i64",
+        "imagebase": "0x400000",
+        "imagesize": "0x1000",
+        "sha256": "0" * 64,
+        "filesize": "0x1000",
+        "filetype": "ELF",
+        "bitness": 64,
+        "procname": "metapc",
+        "is_headless": True,
+    }
+    path_keys = (
+        "path",
+        "idb_path",
+        "file_path",
+        "input_path",
+        "filepath",
+        "file",
+    )
+    with mock.patch.object(
+        _headless_manager,
+        "spawn",
+        new_callable=mock.AsyncMock,
+        return_value=fake_info,
+    ) as mock_spawn:
+      for path_key in path_keys:
+        with self.subTest(path_key=path_key):
+          mock_spawn.reset_mock()
+          await self.mcp_server.call_tool(
+              "idalib_headless_open", {path_key: "/tmp/test.bin"}
+          )
+          mock_spawn.assert_awaited_once()
+          self.assertEqual(mock_spawn.await_args.args[0], "/tmp/test.bin")
+
+  async def test_hexdump_accepts_aliases(self):
+    """Test hexdump binds every database_id, address, and length alias."""
+    with mock.patch(
+        "gateway.proxy.forward_to",
+        new_callable=mock.AsyncMock,
+        return_value="00400000: 90",
+    ) as mock_forward:
+      for db_key in _DATABASE_ID_KEYS:
+        for addr_key in _ADDRESS_KEYS:
+          for len_key in ("length", "size"):
+            with self.subTest(
+                db_key=db_key, addr_key=addr_key, len_key=len_key
+            ):
+              mock_forward.reset_mock()
+              await self.mcp_server.call_tool(
+                  "hexdump",
+                  {db_key: "db1", addr_key: "0x400000", len_key: 64},
+              )
+              target, tool_name, args = mock_forward.await_args.args
+              self.assertEqual(target, "db1")
+              self.assertEqual(tool_name, "hexdump")
+              self.assertEqual(
+                  args,
+                  {
+                      "database_id": "db1",
+                      "address": "0x400000",
+                      "length": 64,
+                  },
+              )
+
+  def test_all_proxied_address_tools_use_address_aliases(self):
+    """Test every proxied address parameter uses ADDRESS_ALIASES."""
+    # pylint: disable=g-import-not-at-top
+    import inspect
+    from typing import get_args
+    import gateway.proxy
+    from shared import types as shared_types
+
+    # pylint: enable=g-import-not-at-top
+
+    checked = 0
+    for name, obj in inspect.getmembers(
+        gateway.proxy, inspect.iscoroutinefunction
+    ):
+      sig = inspect.signature(obj)
+      if "address" not in sig.parameters:
+        continue
+      checked += 1
+      with self.subTest(tool=name):
+        extras = get_args(sig.parameters["address"].annotation)[1:]
+        aliases = [
+            getattr(m, "validation_alias", None)
+            for m in extras
+            if getattr(m, "validation_alias", None) is not None
+        ]
+        self.assertEqual(aliases, [shared_types.ADDRESS_ALIASES])
+    self.assertEqual(checked, 38)
+
+  def test_shared_types_fallback_without_pydantic(self):
+    """Test shared.types defines dummy Field/AliasChoices without pydantic."""
+    # pylint: disable=g-import-not-at-top
+    import importlib.util
+    import sys
+    from typing import Annotated, get_args, get_origin
+    from shared import types as shared_types
+
+    # pylint: enable=g-import-not-at-top
+
+    spec = importlib.util.spec_from_file_location(
+        "_shared_types_no_pydantic", shared_types.__file__
+    )
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    with mock.patch.dict(sys.modules, {"pydantic": None}):
+      spec.loader.exec_module(mod)
+
+    self.assertEqual(mod.ADDRESS_ALIASES, ("address", "ea", "addr"))
+    ann = Annotated[mod.Address, mod.Field(description="desc")]
+    self.assertIs(get_origin(ann), Annotated)
+    self.assertIs(get_args(ann)[0], str)

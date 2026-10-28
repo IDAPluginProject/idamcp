@@ -32,7 +32,13 @@ import ida_nalt
 import ida_typeinf
 import idaapi
 from shared.rpc import ToolError
-from shared.types import BatchResponseItem, ReadDataRequest
+from shared.types import (
+    Address,
+    AliasChoices,
+    BatchResponseItem,
+    Field,
+    ReadDataRequest,
+)
 
 
 def get_global_variable_value_internal(ea: int) -> str:
@@ -223,9 +229,19 @@ def read_data(
 @jsonrpc
 @idaread
 def hexdump(
-    address: Annotated[str, "Address (e.g., '0x400000') to start the hexdump"],
+    address: Annotated[
+        Address,
+        Field(description="Address (e.g., '0x400000') to start the hexdump"),
+    ],
     length: Annotated[
-        int, "Length of the memory region to dump in bytes, max 0x1000 per call"
+        int,
+        Field(
+            validation_alias=AliasChoices("length", "size"),
+            description=(
+                "Length of the memory region to dump in bytes, max 0x1000 per"
+                " call"
+            ),
+        ),
     ],
 ) -> str:
   """Get a formatted hexadecimal dump of memory at the specified address.

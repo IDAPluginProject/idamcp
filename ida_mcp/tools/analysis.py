@@ -46,12 +46,14 @@ import idautils
 import idc
 from shared.config import load_config
 from shared.rpc import ToolError
+from shared.types import Address
 from shared.types import BasicBlock
 from shared.types import Caller
 from shared.types import CallGraph
 from shared.types import CallGraphEdge
 from shared.types import CallGraphNode
 from shared.types import ControlFlowGraph
+from shared.types import Field
 from shared.types import Function
 from shared.types import SearchResult
 from shared.types import Xref
@@ -60,7 +62,9 @@ from shared.types import Xref
 @jsonrpc
 @idaread
 def get_xrefs_from(
-    address: Annotated[str, "Address to get cross-references from"],
+    address: Annotated[
+        Address, Field(description="Address to get cross-references from")
+    ],
 ) -> list[Xref]:
   """Retrieves all cross-references originating from a specific address."""
   ea = helper.parse_and_check_ea(address)
@@ -96,7 +100,9 @@ def _omitted_warning_ids() -> set[int]:
 @jsonrpc
 @idaread
 def decompile_function(
-    address: Annotated[str, "Address of the function to decompile"],
+    address: Annotated[
+        Address, Field(description="Address of the function to decompile")
+    ],
     include_line_prefix: Annotated[
         bool,
         "Whether to include the line prefix (line numbers and addresses) in the"
@@ -175,7 +181,9 @@ def decompile_function(
 @jsonrpc
 @idaread
 def disassemble_code(
-    address: Annotated[str, "Address to disassemble code"],
+    address: Annotated[
+        Address, Field(description="Address to disassemble code")
+    ],
     count: Annotated[int, "Number of instructions to disassemble"] = 1,
     include_bytes: Annotated[
         bool, "Whether to include opcode bytes in the disassembly output"
@@ -396,7 +404,9 @@ def _get_func_block_ranges(
 @jsonrpc
 @idaread
 def disassemble_function(
-    address: Annotated[str, "Address of the function to disassemble"],
+    address: Annotated[
+        Address, Field(description="Address of the function to disassemble")
+    ],
     include_bytes: Annotated[
         bool, "Whether to include opcode bytes in the disassembly output"
     ] = False,
@@ -427,7 +437,9 @@ def disassemble_function(
 @jsonrpc
 @idaread
 def get_xrefs_to(
-    address: Annotated[str, "Address to get cross references to"],
+    address: Annotated[
+        Address, Field(description="Address to get cross references to")
+    ],
 ) -> list[Xref]:
   """Get all cross references to the given address."""
   xrefs = []
@@ -514,7 +526,10 @@ def get_xrefs_to_field(
 @jsonrpc
 @idaread
 def get_callees(
-    address: Annotated[str, "Address of the function to get callee functions"],
+    address: Annotated[
+        Address,
+        Field(description="Address of the function to get callee functions"),
+    ],
 ) -> list[Function]:
   """Get all callees of a function."""
   return helper.get_callees(helper.parse_and_check_ea(address))
@@ -523,7 +538,9 @@ def get_callees(
 @jsonrpc
 @idaread
 def get_callers(
-    address: Annotated[str, "Address of the function to get callers"],
+    address: Annotated[
+        Address, Field(description="Address of the function to get callers")
+    ],
 ) -> list[Caller]:
   """Get all callers of the given address."""
   return helper.get_callers(helper.parse_and_check_ea(address))
@@ -553,7 +570,9 @@ def get_start_ea() -> str:
 @jsonrpc
 @idaread
 def get_call_graph_from(
-    address: Annotated[str, "Address of the function to start from"],
+    address: Annotated[
+        Address, Field(description="Address of the function to start from")
+    ],
     depth: Annotated[int, "Traversal depth"] = 2,
     max_nodes: Annotated[int, "Maximum number of nodes to return"] = 50,
 ) -> CallGraph:
@@ -613,7 +632,9 @@ def get_call_graph_from(
 @jsonrpc
 @idaread
 def get_call_graph_to(
-    address: Annotated[str, "Address of the function to start from"],
+    address: Annotated[
+        Address, Field(description="Address of the function to start from")
+    ],
     depth: Annotated[int, "Traversal depth"] = 2,
     max_nodes: Annotated[int, "Maximum number of nodes to return"] = 50,
 ) -> CallGraph:
@@ -787,7 +808,9 @@ def get_call_graph_between(
 @jsonrpc
 @idaread
 def get_function_cfg(
-    address: Annotated[str, "Address of the function to analyze"],
+    address: Annotated[
+        Address, Field(description="Address of the function to analyze")
+    ],
 ) -> ControlFlowGraph:
   """Get the Control Flow Graph (CFG) of a function."""
   ea = helper.parse_and_check_ea(address)
@@ -1060,7 +1083,7 @@ def search_text(
 @jsonrpc
 @idawrite
 def undefine(
-    address: Annotated[str, "Address to undefine"],
+    address: Annotated[Address, Field(description="Address to undefine")],
     size: Annotated[int, "Number of bytes to undefine"] = 1,
 ) -> str:
   """Clear code/data definitions in a range (GUI: 'U')."""
@@ -1082,7 +1105,9 @@ def _make_code(ea: int) -> bool:
 @jsonrpc
 @idawrite
 def make_code(
-    address: Annotated[str, "Address to convert to instructions"],
+    address: Annotated[
+        Address, Field(description="Address to convert to instructions")
+    ],
 ) -> str:
   """Convert raw bytes to instructions at an address (GUI: 'C').
 
@@ -1099,7 +1124,9 @@ def make_code(
 @jsonrpc
 @idawrite
 def make_function(
-    address: Annotated[str, "Address to define function"],
+    address: Annotated[
+        Address, Field(description="Address to define function")
+    ],
 ) -> str:
   """Define a function at a code location (GUI: 'P').
 
@@ -1116,7 +1143,9 @@ def make_function(
 @jsonrpc
 @idaread
 def get_data_xrefs_from(
-    address: Annotated[str, "Address to get data xrefs from"],
+    address: Annotated[
+        Address, Field(description="Address to get data xrefs from")
+    ],
 ) -> list[str]:
   """Retrieve the addresses pointed to by the data at a specific location."""
   ea = helper.parse_and_check_ea(address)

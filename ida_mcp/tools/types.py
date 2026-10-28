@@ -33,8 +33,10 @@ from ida_mcp.utils import helper
 import ida_typeinf
 import idaapi
 from shared.rpc import ToolError
+from shared.types import Address
 from shared.types import EnumDefinition
 from shared.types import EnumMember
+from shared.types import Field
 from shared.types import StackFrameVariable
 from shared.types import StructureDefinition
 from shared.types import StructureMember
@@ -236,7 +238,9 @@ def list_structs(
 @jsonrpc
 @idaread
 def get_struct_at_address(
-    address: Annotated[str, "Address to analyze structure at"],
+    address: Annotated[
+        Address, Field(description="Address to analyze structure at")
+    ],
     struct_name: Annotated[str, "Name of the structure"],
 ) -> dict[str, Any]:
   """Get structure field values at a specific address."""
@@ -352,10 +356,12 @@ def get_stack_frame_variables_internal(
 @idaread
 def get_stack_frame_variables(
     address: Annotated[
-        str,
-        (
-            "Address of the disassembled function to retrieve the stack frame"
-            " variables"
+        Address,
+        Field(
+            description=(
+                "Address of the disassembled function to retrieve the stack"
+                " frame variables"
+            )
         ),
     ],
 ) -> list[StackFrameVariable]:

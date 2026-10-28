@@ -35,7 +35,9 @@ from ida_mcp.utils import helper
 import ida_name
 import idaapi
 from shared.rpc import ToolError
+from shared.types import Address
 from shared.types import Breakpoint
+from shared.types import Field
 from shared.types import RegisterValue
 from shared.types import ThreadRegisters
 
@@ -293,7 +295,9 @@ def dbg_continue_process() -> str:
 @idaread
 @unsafe
 def dbg_run_to(
-    address: Annotated[str, "Run the debugger to the specified address"],
+    address: Annotated[
+        Address, Field(description="Run the debugger to the specified address")
+    ],
 ):
   """Run the debugger to the specified address."""
   dbg_ensure_running()
@@ -309,7 +313,9 @@ def dbg_run_to(
 @idaread
 @unsafe
 def dbg_set_breakpoint(
-    address: Annotated[str, "Set a breakpoint at the specified address"],
+    address: Annotated[
+        Address, Field(description="Set a breakpoint at the specified address")
+    ],
 ):
   """Set a breakpoint at the specified address."""
   ea = helper.parse_int(address)
@@ -352,7 +358,9 @@ def dbg_step_over():
 @idaread
 @unsafe
 def dbg_delete_breakpoint(
-    address: Annotated[str, "del a breakpoint at the specified address"],
+    address: Annotated[
+        Address, Field(description="del a breakpoint at the specified address")
+    ],
 ):
   """Delete a breakpoint at the specified address."""
   ea = helper.parse_int(address)
@@ -366,7 +374,12 @@ def dbg_delete_breakpoint(
 @unsafe
 def dbg_enable_breakpoint(
     address: Annotated[
-        str, "Enable or disable a breakpoint at the specified address"
+        Address,
+        Field(
+            description=(
+                "Enable or disable a breakpoint at the specified address"
+            )
+        ),
     ],
     enable: Annotated[bool, "Enable or disable a breakpoint"],
 ):

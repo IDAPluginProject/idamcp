@@ -52,7 +52,9 @@ except ImportError as e:
 @mcp_tool
 async def get_xrefs_from(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to get cross-references from"],
+    address: Annotated[
+        Address, Field(description="Address to get cross-references from")
+    ],
 ) -> list[Xref]:
   """Retrieves all cross-references originating from a specific address."""
   return await forward_to(database_id, "get_xrefs_from", locals())
@@ -61,7 +63,9 @@ async def get_xrefs_from(
 @mcp_tool
 async def decompile_function(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function to decompile"],
+    address: Annotated[
+        Address, Field(description="Address of the function to decompile")
+    ],
     include_line_prefix: Annotated[
         bool,
         "Whether to include the line prefix (line numbers and addresses) in the"
@@ -75,7 +79,9 @@ async def decompile_function(
 @mcp_tool
 async def disassemble_code(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to disassemble code"],
+    address: Annotated[
+        Address, Field(description="Address to disassemble code")
+    ],
     count: Annotated[int, "Number of instructions to disassemble"] = 1,
     include_bytes: Annotated[
         bool, "Whether to include opcode bytes in the disassembly output"
@@ -117,7 +123,9 @@ async def get_ida_view(
 @mcp_tool
 async def disassemble_function(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function to disassemble"],
+    address: Annotated[
+        Address, Field(description="Address of the function to disassemble")
+    ],
     include_bytes: Annotated[
         bool, "Whether to include opcode bytes in the disassembly output"
     ] = False,
@@ -129,7 +137,9 @@ async def disassemble_function(
 @mcp_tool
 async def get_xrefs_to(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to get cross references to"],
+    address: Annotated[
+        Address, Field(description="Address to get cross references to")
+    ],
 ) -> list[Xref]:
   """Get all cross references to the given address."""
   return await forward_to(database_id, "get_xrefs_to", locals())
@@ -150,7 +160,10 @@ async def get_xrefs_to_field(
 @mcp_tool
 async def get_callees(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function to get callee functions"],
+    address: Annotated[
+        Address,
+        Field(description="Address of the function to get callee functions"),
+    ],
 ) -> list[Function]:
   """Get all callees of a function."""
   return await forward_to(database_id, "get_callees", locals())
@@ -159,7 +172,9 @@ async def get_callees(
 @mcp_tool
 async def get_callers(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function to get callers"],
+    address: Annotated[
+        Address, Field(description="Address of the function to get callers")
+    ],
 ) -> list[Caller]:
   """Get all callers of the given address."""
   return await forward_to(database_id, "get_callers", locals())
@@ -184,7 +199,9 @@ async def get_start_ea(
 @mcp_tool
 async def get_call_graph_from(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function to start from"],
+    address: Annotated[
+        Address, Field(description="Address of the function to start from")
+    ],
     depth: Annotated[int, "Traversal depth"] = 2,
     max_nodes: Annotated[int, "Maximum number of nodes to return"] = 50,
 ) -> CallGraph:
@@ -195,7 +212,9 @@ async def get_call_graph_from(
 @mcp_tool
 async def get_call_graph_to(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function to start from"],
+    address: Annotated[
+        Address, Field(description="Address of the function to start from")
+    ],
     depth: Annotated[int, "Traversal depth"] = 2,
     max_nodes: Annotated[int, "Maximum number of nodes to return"] = 50,
 ) -> CallGraph:
@@ -218,7 +237,9 @@ async def get_call_graph_between(
 @mcp_tool
 async def get_function_cfg(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function to analyze"],
+    address: Annotated[
+        Address, Field(description="Address of the function to analyze")
+    ],
 ) -> ControlFlowGraph:
   """Get the Control Flow Graph (CFG) of a function."""
   return await forward_to(database_id, "get_function_cfg", locals())
@@ -338,7 +359,7 @@ async def search_text(
 @mcp_tool
 async def undefine(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to undefine"],
+    address: Annotated[Address, Field(description="Address to undefine")],
     size: Annotated[int, "Number of bytes to undefine"] = 1,
 ) -> str:
   """Clear code/data definitions in a range (GUI: 'U')."""
@@ -348,7 +369,9 @@ async def undefine(
 @mcp_tool
 async def make_code(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to convert to instructions"],
+    address: Annotated[
+        Address, Field(description="Address to convert to instructions")
+    ],
 ) -> str:
   """Convert raw bytes to instructions at an address (GUI: 'C').
 
@@ -361,7 +384,9 @@ async def make_code(
 @mcp_tool
 async def make_function(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to define function"],
+    address: Annotated[
+        Address, Field(description="Address to define function")
+    ],
 ) -> str:
   """Define a function at a code location (GUI: 'P').
 
@@ -375,7 +400,9 @@ async def make_function(
 @mcp_tool
 async def get_data_xrefs_from(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to get data xrefs from"],
+    address: Annotated[
+        Address, Field(description="Address to get data xrefs from")
+    ],
 ) -> list[str]:
   """Retrieve the addresses pointed to by the data at a specific location."""
   return await forward_to(database_id, "get_data_xrefs_from", locals())
@@ -483,7 +510,9 @@ async def dbg_continue_process(
 @mcp_tool
 async def dbg_run_to(
     database_id: DatabaseId,
-    address: Annotated[str, "Run the debugger to the specified address"],
+    address: Annotated[
+        Address, Field(description="Run the debugger to the specified address")
+    ],
 ):
   """Run the debugger to the specified address."""
   return await forward_to(database_id, "dbg_run_to", locals())
@@ -492,7 +521,9 @@ async def dbg_run_to(
 @mcp_tool
 async def dbg_set_breakpoint(
     database_id: DatabaseId,
-    address: Annotated[str, "Set a breakpoint at the specified address"],
+    address: Annotated[
+        Address, Field(description="Set a breakpoint at the specified address")
+    ],
 ):
   """Set a breakpoint at the specified address."""
   return await forward_to(database_id, "dbg_set_breakpoint", locals())
@@ -517,7 +548,9 @@ async def dbg_step_over(
 @mcp_tool
 async def dbg_delete_breakpoint(
     database_id: DatabaseId,
-    address: Annotated[str, "del a breakpoint at the specified address"],
+    address: Annotated[
+        Address, Field(description="del a breakpoint at the specified address")
+    ],
 ):
   """Delete a breakpoint at the specified address."""
   return await forward_to(database_id, "dbg_delete_breakpoint", locals())
@@ -527,7 +560,12 @@ async def dbg_delete_breakpoint(
 async def dbg_enable_breakpoint(
     database_id: DatabaseId,
     address: Annotated[
-        str, "Enable or disable a breakpoint at the specified address"
+        Address,
+        Field(
+            description=(
+                "Enable or disable a breakpoint at the specified address"
+            )
+        ),
     ],
     enable: Annotated[bool, "Enable or disable a breakpoint"],
 ):
@@ -538,7 +576,9 @@ async def dbg_enable_breakpoint(
 @mcp_tool
 async def jump_to_address(
     database_id: DatabaseId,
-    address: Annotated[str, "The target address to jump to"],
+    address: Annotated[
+        Address, Field(description="The target address to jump to")
+    ],
 ) -> str:
   """Navigates the IDA UI (IDA View/Pseudocode) to the specified address."""
   return await forward_to(database_id, "jump_to_address", locals())
@@ -556,7 +596,9 @@ async def set_colors(
 @mcp_tool
 async def set_comment(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to set the comment for"],
+    address: Annotated[
+        Address, Field(description="Address to set the comment for")
+    ],
     comment: Annotated[str, "Comment text"],
 ) -> SetCommentResult:
   """Sets a comment at the specified address in both disassembly and pseudocode.
@@ -580,7 +622,10 @@ async def set_comment(
 @mcp_tool
 async def rename_local_variables(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function containing the variables"],
+    address: Annotated[
+        Address,
+        Field(description="Address of the function containing the variables"),
+    ],
     renames: Annotated[
         List[LocalVariableRename], "List of variable renames to apply"
     ],
@@ -603,7 +648,10 @@ async def rename_addresses(
 @mcp_tool
 async def set_local_variable_types(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function containing the variables"],
+    address: Annotated[
+        Address,
+        Field(description="Address of the function containing the variables"),
+    ],
     type_changes: Annotated[
         List[LocalVariableTypeChange], "List of variable type changes to apply"
     ],
@@ -615,7 +663,10 @@ async def set_local_variable_types(
 @mcp_tool
 async def rename_stack_frame_variables(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function containing the variables"],
+    address: Annotated[
+        Address,
+        Field(description="Address of the function containing the variables"),
+    ],
     renames: Annotated[
         List[StackFrameVariableRename], "List of variable renames"
     ],
@@ -627,7 +678,10 @@ async def rename_stack_frame_variables(
 @mcp_tool
 async def create_stack_frame_variables(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function containing the variables"],
+    address: Annotated[
+        Address,
+        Field(description="Address of the function containing the variables"),
+    ],
     creations: Annotated[
         List[StackFrameVariableCreate], "List of variable creations"
     ],
@@ -640,7 +694,10 @@ async def create_stack_frame_variables(
 async def set_stack_frame_variable_types(
     database_id: DatabaseId,
     address: Annotated[
-        str, "The hex address of the target function, e.g. '0x40000'"
+        Address,
+        Field(
+            description="The hex address of the target function, e.g. '0x40000'"
+        ),
     ],
     type_changes: Annotated[
         List[StackFrameVariableTypeChange], "List of variable type changes"
@@ -656,7 +713,10 @@ async def set_stack_frame_variable_types(
 async def delete_stack_frame_variables(
     database_id: DatabaseId,
     address: Annotated[
-        str, "The hex address of the target function, e.g. '0x40000'"
+        Address,
+        Field(
+            description="The hex address of the target function, e.g. '0x40000'"
+        ),
     ],
     variable_names: Annotated[List[str], "List of variable names to delete"],
 ) -> str:
@@ -667,7 +727,7 @@ async def delete_stack_frame_variables(
 @mcp_tool
 async def set_functions_noret(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function"],
+    address: Annotated[Address, Field(description="Address of the function")],
     is_noret: Annotated[bool, "True to mark as non-returning, False otherwise"],
 ) -> str:
   """Set or unset the non-returning flag for functions."""
@@ -706,7 +766,9 @@ async def patch_bytes(
 @mcp_tool
 async def apply_enums_to_operands(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the instruction"],
+    address: Annotated[
+        Address, Field(description="Address of the instruction")
+    ],
     op_index: Annotated[int, "Operand index (0-based)"],
     enum_name: Annotated[str, "Name of the enum to apply"],
 ) -> str:
@@ -737,7 +799,9 @@ async def make_data_batch(
 @mcp_tool
 async def make_structs(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to create structure instance at"],
+    address: Annotated[
+        Address, Field(description="Address to create structure instance at")
+    ],
     struct_name: Annotated[str, "Name of the structure type"],
     size: Annotated[
         int,
@@ -767,7 +831,9 @@ async def make_strings(
 @mcp_tool
 async def make_arrays(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to create array at"],
+    address: Annotated[
+        Address, Field(description="Address to create array at")
+    ],
     count: Annotated[int, "Number of items in the array"],
 ) -> str:
   """Create an array of items starting at the specified address."""
@@ -832,7 +898,9 @@ async def export_file(
 @mcp_tool
 async def get_comment(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to retrieve the comment from"],
+    address: Annotated[
+        Address, Field(description="Address to retrieve the comment from")
+    ],
 ) -> str:
   """Retrieves the comment associated with a specific address."""
   return await forward_to(database_id, "get_comment", locals())
@@ -849,7 +917,9 @@ async def get_metadata(
 @mcp_tool
 async def get_function_by_address(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the function to get"],
+    address: Annotated[
+        Address, Field(description="Address of the function to get")
+    ],
 ) -> Function:
   """Get a function by its address."""
   return await forward_to(database_id, "get_function_by_address", locals())
@@ -874,7 +944,9 @@ async def get_current_function(
 @mcp_tool
 async def get_basic_block(
     database_id: DatabaseId,
-    address: Annotated[str, "Address inside the basic block"],
+    address: Annotated[
+        Address, Field(description="Address inside the basic block")
+    ],
 ) -> BasicBlock | str:
   """Get the basic block containing the specified address."""
   return await forward_to(database_id, "get_basic_block", locals())
@@ -883,7 +955,7 @@ async def get_basic_block(
 @mcp_tool
 async def get_function_flags(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to check"],
+    address: Annotated[Address, Field(description="Address to check")],
 ) -> list[FunctionFlags]:
   """Check if the address belongs to a library function (FLIRT)."""
   return await forward_to(database_id, "get_function_flags", locals())
@@ -1005,7 +1077,9 @@ async def list_bookmarks(
 @mcp_tool
 async def get_operand(
     database_id: DatabaseId,
-    address: Annotated[str, "Address of the instruction"],
+    address: Annotated[
+        Address, Field(description="Address of the instruction")
+    ],
     op_index: Annotated[int, "Operand index (0-based)"],
 ) -> Operand:
   """Get the operand of an instruction."""
@@ -1052,9 +1126,19 @@ async def read_data(
 @mcp_tool
 async def hexdump(
     database_id: DatabaseId,
-    address: Annotated[str, "Address (e.g., '0x400000') to start the hexdump"],
+    address: Annotated[
+        Address,
+        Field(description="Address (e.g., '0x400000') to start the hexdump"),
+    ],
     length: Annotated[
-        int, "Length of the memory region to dump in bytes, max 0x1000 per call"
+        int,
+        Field(
+            validation_alias=AliasChoices("length", "size"),
+            description=(
+                "Length of the memory region to dump in bytes, max 0x1000 per"
+                " call"
+            ),
+        ),
     ],
 ) -> str:
   """Get a formatted hexadecimal dump of memory at the specified address.
@@ -1117,7 +1201,9 @@ async def list_structs(
 @mcp_tool
 async def get_struct_at_address(
     database_id: DatabaseId,
-    address: Annotated[str, "Address to analyze structure at"],
+    address: Annotated[
+        Address, Field(description="Address to analyze structure at")
+    ],
     struct_name: Annotated[str, "Name of the structure"],
 ) -> dict[str, Any]:
   """Get structure field values at a specific address."""
@@ -1128,10 +1214,12 @@ async def get_struct_at_address(
 async def get_stack_frame_variables(
     database_id: DatabaseId,
     address: Annotated[
-        str,
-        (
-            "Address of the disassembled function to retrieve the stack frame"
-            " variables"
+        Address,
+        Field(
+            description=(
+                "Address of the disassembled function to retrieve the stack"
+                " frame variables"
+            )
         ),
     ],
 ) -> list[StackFrameVariable]:

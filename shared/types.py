@@ -32,6 +32,26 @@ from typing import (
     TypedDict,
 )
 
+try:
+  from pydantic import AliasChoices  # pylint: disable=g-import-not-at-top
+  from pydantic import Field  # pylint: disable=g-import-not-at-top
+except Exception:  # pylint: disable=broad-exception-caught
+  # pylint: disable=invalid-name
+  def AliasChoices(*choices: str) -> Any:
+    """Dummy pydantic.AliasChoices when pydantic is unavailable."""
+    return choices
+
+  def Field(*args: Any, **kwargs: Any) -> Any:
+    """Dummy pydantic.Field when pydantic is unavailable."""
+    del args, kwargs
+
+  # pylint: enable=invalid-name
+
+
+ADDRESS_ALIASES = AliasChoices("address", "ea", "addr")
+
+Address = Annotated[str, Field(validation_alias=ADDRESS_ALIASES)]
+
 
 class Argument(TypedDict):
   name: str

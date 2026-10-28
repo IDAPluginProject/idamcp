@@ -39,7 +39,9 @@ import idc
 from shared.rpc import ToolError
 from shared.types import (
     AddEntryPointRequest,
+    Address,
     ConvertToOffsetRequest,
+    Field,
     LocalVariableRename,
     LocalVariableTypeChange,
     MakeDataRequest,
@@ -57,7 +59,9 @@ from shared.types import (
 @jsonrpc
 @idawrite
 def jump_to_address(
-    address: Annotated[str, "The target address to jump to"],
+    address: Annotated[
+        Address, Field(description="The target address to jump to")
+    ],
 ) -> str:
   """Navigates the IDA UI (IDA View/Pseudocode) to the specified address."""
   try:
@@ -112,7 +116,9 @@ def set_colors(
 @jsonrpc
 @idawrite
 def set_comment(
-    address: Annotated[str, "Address to set the comment for"],
+    address: Annotated[
+        Address, Field(description="Address to set the comment for")
+    ],
     comment: Annotated[str, "Comment text"],
 ) -> SetCommentResult:
   """Sets a comment at the specified address in both disassembly and pseudocode.
@@ -203,7 +209,10 @@ def set_comment(
 @jsonrpc
 @idawrite
 def rename_local_variables(
-    address: Annotated[str, "Address of the function containing the variables"],
+    address: Annotated[
+        Address,
+        Field(description="Address of the function containing the variables"),
+    ],
     renames: Annotated[
         List[LocalVariableRename], "List of variable renames to apply"
     ],
@@ -295,7 +304,10 @@ class my_modifier_t(ida_hexrays.user_lvar_modifier_t):  # pylint: disable=invali
 @jsonrpc
 @idawrite
 def set_local_variable_types(
-    address: Annotated[str, "Address of the function containing the variables"],
+    address: Annotated[
+        Address,
+        Field(description="Address of the function containing the variables"),
+    ],
     type_changes: Annotated[
         List[LocalVariableTypeChange], "List of variable type changes to apply"
     ],
@@ -340,7 +352,10 @@ def set_local_variable_types(
 @jsonrpc
 @idawrite
 def rename_stack_frame_variables(
-    address: Annotated[str, "Address of the function containing the variables"],
+    address: Annotated[
+        Address,
+        Field(description="Address of the function containing the variables"),
+    ],
     renames: Annotated[
         List[StackFrameVariableRename], "List of variable renames"
     ],
@@ -402,7 +417,10 @@ def rename_stack_frame_variables(
 @jsonrpc
 @idawrite
 def create_stack_frame_variables(
-    address: Annotated[str, "Address of the function containing the variables"],
+    address: Annotated[
+        Address,
+        Field(description="Address of the function containing the variables"),
+    ],
     creations: Annotated[
         List[StackFrameVariableCreate], "List of variable creations"
     ],
@@ -451,7 +469,10 @@ def create_stack_frame_variables(
 @idawrite
 def set_stack_frame_variable_types(
     address: Annotated[
-        str, "The hex address of the target function, e.g. '0x40000'"
+        Address,
+        Field(
+            description="The hex address of the target function, e.g. '0x40000'"
+        ),
     ],
     type_changes: Annotated[
         List[StackFrameVariableTypeChange], "List of variable type changes"
@@ -505,7 +526,10 @@ def set_stack_frame_variable_types(
 @idawrite
 def delete_stack_frame_variables(
     address: Annotated[
-        str, "The hex address of the target function, e.g. '0x40000'"
+        Address,
+        Field(
+            description="The hex address of the target function, e.g. '0x40000'"
+        ),
     ],
     variable_names: Annotated[List[str], "List of variable names to delete"],
 ) -> str:
@@ -567,7 +591,7 @@ def delete_stack_frame_variables(
 @jsonrpc
 @idawrite
 def set_functions_noret(
-    address: Annotated[str, "Address of the function"],
+    address: Annotated[Address, Field(description="Address of the function")],
     is_noret: Annotated[bool, "True to mark as non-returning, False otherwise"],
 ) -> str:
   """Set or unset the non-returning flag for functions."""
@@ -678,7 +702,9 @@ def patch_bytes(
 @jsonrpc
 @idawrite
 def apply_enums_to_operands(
-    address: Annotated[str, "Address of the instruction"],
+    address: Annotated[
+        Address, Field(description="Address of the instruction")
+    ],
     op_index: Annotated[int, "Operand index (0-based)"],
     enum_name: Annotated[str, "Name of the enum to apply"],
 ) -> str:
@@ -801,7 +827,9 @@ def make_data_batch(
 @jsonrpc
 @idawrite
 def make_structs(
-    address: Annotated[str, "Address to create structure instance at"],
+    address: Annotated[
+        Address, Field(description="Address to create structure instance at")
+    ],
     struct_name: Annotated[str, "Name of the structure type"],
     size: Annotated[
         int,
@@ -848,7 +876,9 @@ def make_strings(
 @jsonrpc
 @idawrite
 def make_arrays(
-    address: Annotated[str, "Address to create array at"],
+    address: Annotated[
+        Address, Field(description="Address to create array at")
+    ],
     count: Annotated[int, "Number of items in the array"],
 ) -> str:
   """Create an array of items starting at the specified address."""
