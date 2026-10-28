@@ -497,7 +497,7 @@ def _get_func_info(func_ea: int) -> FuncInfo | None:
       name=func_name,
       demangled_name=demangled or None,
       prototype=proto or None,
-      size=func_size,
+      size=_to_signed_64(func_size),
       is_lib=is_lib,
   )
 
@@ -673,7 +673,7 @@ def _get_segments_info_inner():
         seg.sclass,
         _to_signed_64(seg.start_ea),
         _to_signed_64(seg.end_ea),
-        seg.end_ea - seg.start_ea,
+        _to_signed_64(seg.end_ea - seg.start_ea),
         helper.ida_segment_perm2str(seg.perm),
     ))
   return data
@@ -929,8 +929,8 @@ def populate_entries():
           ea = name_ea
 
       yield (
-          idx,
-          ordinal,
+          _to_signed_64(idx),
+          _to_signed_64(ordinal),
           _to_signed_64(ea),
           name,
       )
@@ -1192,7 +1192,7 @@ def _db_worker():
               signed_old_start = _to_signed_64(old_start_ea)
               signed_new_start = _to_signed_64(new_start_ea)
               signed_end = _to_signed_64(end_ea)
-              new_size = end_ea - new_start_ea
+              new_size = _to_signed_64(end_ea - new_start_ea)
 
               if _table_exists("functions"):
                 cursor.execute(
@@ -1236,7 +1236,7 @@ def _db_worker():
               signed_start = _to_signed_64(start_ea)
               signed_old_end = _to_signed_64(old_end_ea)
               signed_new_end = _to_signed_64(new_end_ea)
-              new_size = new_end_ea - start_ea
+              new_size = _to_signed_64(new_end_ea - start_ea)
 
               if _table_exists("functions"):
                 cursor.execute(

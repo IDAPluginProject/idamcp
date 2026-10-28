@@ -970,5 +970,107 @@ class TestLocalTypesSync(unittest.TestCase):
     self.assertEqual(results[0]["rows"], [{"name": "TypeA"}])
 
 
+class TestUnsigned64BitPopulation(unittest.TestCase):
+  """Tests SQLite population and querying for uint64 values >= 2**63."""
+
+  def test_populate_entries_handles_high_uint64_ordinals(self):
+    # pylint: disable=g-import-not-at-top
+    from gateway.query import adjust_query
+    import sqlglot
+
+    # pylint: enable=g-import-not-at-top
+
+    entries = [
+        (0, 0x0, 0x0, "start"),
+        (1, 0xFFFFFFFFFFFFFFF0, 0xFFFFFFFFFFFFFFF0, "start"),
+        (2, 0x8000000000000000, 0x8000000000001000, "high_ep"),
+    ]
+    badaddr = 0xFFFFFFFFFFFFFFFF
+
+    def fake_get_name_ea(_, name):
+      return 0x0 if name == "start" else badaddr
+
+    with (
+        mock.patch.object(query.idautils, "Entries", return_value=entries),
+        mock.patch.object(query.idaapi, "BADADDR", badaddr),
+        mock.patch.object(
+            query.ida_name, "get_name_ea", side_effect=fake_get_name_ea
+        ),
+        mock.patch.object(query, "_db_initialized", True),
+    ):
+      query.populate_entries()
+
+      eq_sql = adjust_query(
+          sqlglot.parse_one(
+              "SELECT index_id, ordinal, address, name FROM entries"
+              " WHERE ordinal = 0xfffffffffffffff0",
+              read="sqlite",
+          )
+      )
+      ge_sql = adjust_query(
+          sqlglot.parse_one(
+              "SELECT ordinal, name FROM entries"
+              " WHERE ordinal >= 0x8000000000000000 ORDER BY index_id",
+              read="sqlite",
+          )
+      )
+      results = asyncio.run(
+          query.sql_query([
+              {"sql": eq_sql, "tables": ["entries"]},
+              {"sql": ge_sql, "tables": ["entries"]},
+          ])
+      )
+
+    self.assertEqual(
+        results[0]["rows"],
+        [{
+            "index_id": "0x1",
+            "ordinal": "0xfffffffffffffff0",
+            "address": "0x0",
+            "name": "start",
+        }],
+    )
+    self.assertEqual(
+        results[1]["rows"],
+        [
+            {"ordinal": "0xfffffffffffffff0", "name": "start"},
+            {"ordinal": "0x8000000000000000", "name": "high_ep"},
+        ],
+    )
+
+  def test_populate_segments_handles_high_uint64_size(self):
+    seg = mock.Mock()
+    seg.name = "flat64"
+    seg.sclass = "CODE"
+    seg.start_ea = 0x0
+    seg.end_ea = 0x8000000000001000
+    seg.perm = 0
+
+    with (
+        mock.patch.object(query.helper, "get_segments", return_value=[seg]),
+        mock.patch.object(
+            query.helper, "ida_segment_perm2str", return_value="rwx"
+        ),
+        mock.patch.object(query, "_db_initialized", True),
+    ):
+      query.populate_segments()
+      results = asyncio.run(
+          query.sql_query([{
+              "sql": "SELECT name, start_ea, end_ea, size FROM segments",
+              "tables": ["segments"],
+          }])
+      )
+
+    self.assertEqual(
+        results[0]["rows"],
+        [{
+            "name": "flat64",
+            "start_ea": "0x0",
+            "end_ea": "0x8000000000001000",
+            "size": "0x8000000000001000",
+        }],
+    )
+
+
 if __name__ == "__main__":
   unittest.main()
