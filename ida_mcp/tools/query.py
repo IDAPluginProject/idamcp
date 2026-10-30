@@ -40,7 +40,6 @@ import ida_bytes
 import ida_entry
 import ida_funcs
 import ida_idp
-import ida_kernwin
 from ida_mcp.core.decorators import get_cancellation_token
 from ida_mcp.core.decorators import jsonrpc
 from ida_mcp.core.decorators import register_cancel_callback
@@ -968,7 +967,6 @@ POPULATORS = {
 }
 
 _strings_dirty = False
-_skip_string_updates = False
 # Set when IDA reports a local type change without saying which type changed;
 # sql_query then calls refresh_local_types before it reads local_types.
 _local_types_dirty = False
@@ -996,7 +994,6 @@ def sql_query(
   if _db_initialized or not init_tables():
     _db_update_queue.join()
 
-  global _skip_string_updates
   results: list[QueryResult] = []
   for item in queries:
     q = item.get("sql", "").strip()
@@ -1017,35 +1014,8 @@ def sql_query(
               and _is_entries_dirty()
           ):
             populate_entries()
-          elif (
-              not _skip_string_updates
-              and table_name == "strings"
-              and _strings_dirty
-          ):
-            if getattr(idaapi, "is_headless", False):
-              POPULATORS[table_name]()
-            else:
-              # pylint: disable=used-prior-global-declaration
-              @idaread
-              def ask_buttons() -> int:
-                batch_mode = idc.batch(0)
-                try:
-                  return ida_kernwin.ask_buttons(
-                      "Update",
-                      "No",
-                      "Don't Ask Again",
-                      1,
-                      "IDB patches detected. Your 'strings' table may be out of"
-                      " sync.\n\nWould you like to re-index it now?",
-                  )
-                finally:
-                  idc.batch(batch_mode)
-
-              btn_choice = ask_buttons()
-              if btn_choice == 1:
-                POPULATORS[table_name]()
-              elif btn_choice == -1:
-                _skip_string_updates = True
+          elif table_name == "strings" and _strings_dirty:
+            POPULATORS[table_name]()
 
       conn = _get_ro_conn()
       with interruptible_sqlite(conn):
@@ -1689,7 +1659,8 @@ class DBUpdateHooks(ida_idp.IDB_Hooks):
       return
 
     if not row:
-      _strings_dirty = True
+      if load_config().get("rebuild_strings_on_data_patch"):
+        _strings_dirty = True
       return
 
     start_ea, end_ea, _, _ = row

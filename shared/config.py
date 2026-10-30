@@ -57,6 +57,7 @@ _DEFAULT_CONFIG = {
     "populate_tables_on_startup": False,
     "sqlite_persistent": False,
     "check_entries_freshness": False,
+    "rebuild_strings_on_data_patch": False,
     "disabled_tools": [],
     "flush_after_write": False,
     "gui_undo_points": False,
@@ -193,6 +194,7 @@ def load_config(config_path: str | None = None) -> dict[str, Any]:
   _set_option_from_env(config, "disabled_tools")
   _set_option_from_env(config, "sqlite_persistent")
   _set_option_from_env(config, "check_entries_freshness")
+  _set_option_from_env(config, "rebuild_strings_on_data_patch")
   _set_option_from_env(config, "flush_after_write")
   _set_option_from_env(config, "gui_undo_points")
   _set_option_from_env(config, "autostart")

@@ -230,7 +230,26 @@ class TestDBUpdateHooks(unittest.TestCase):
 
   def test_byte_patched_not_in_strings_table_ignored(self):
     sys.modules["idc"].get_func_attr.return_value = sys.modules["idc"].BADADDR
-    self.hooks.byte_patched(ea=0x2000, old_value=0x41)
+    query._strings_dirty = False
+    with mock.patch.object(
+        query,
+        "load_config",
+        return_value={"rebuild_strings_on_data_patch": False},
+    ):
+      self.hooks.byte_patched(ea=0x2000, old_value=0x41)
+    self.assertFalse(query._strings_dirty)
+    self.assertTrue(query._db_update_queue.empty())
+
+  def test_byte_patched_not_in_strings_table_marks_dirty_when_enabled(self):
+    sys.modules["idc"].get_func_attr.return_value = sys.modules["idc"].BADADDR
+    query._strings_dirty = False
+    with mock.patch.object(
+        query,
+        "load_config",
+        return_value={"rebuild_strings_on_data_patch": True},
+    ):
+      self.hooks.byte_patched(ea=0x2000, old_value=0x41)
+    self.assertTrue(query._strings_dirty)
     self.assertTrue(query._db_update_queue.empty())
 
   def test_byte_patched_in_strings_table_enqueues_string_updated(self):
@@ -1070,6 +1089,85 @@ class TestUnsigned64BitPopulation(unittest.TestCase):
             "size": "0x8000000000001000",
         }],
     )
+
+
+class TestDirtyStringsRebuild(unittest.TestCase):
+  """Tests automatic strings rebuild without GUI popup in sql_query."""
+
+  def setUp(self):
+    super().setUp()
+    _drain_queue()
+    query._strings_dirty = False
+
+  def tearDown(self):
+    query._strings_dirty = False
+    super().tearDown()
+
+  def _create_strings_table(self, text: str = "stale") -> None:
+    conn = query._get_rw_conn()
+    with query._db_write_lock:
+      conn.execute("DROP VIEW IF EXISTS strings")
+      conn.execute("DROP TABLE IF EXISTS __internal_strings")
+      conn.execute(
+          "CREATE TABLE __internal_strings (start_ea INTEGER, end_ea INTEGER,"
+          " length INTEGER, string TEXT)"
+      )
+      conn.execute(
+          "CREATE VIEW strings AS SELECT start_ea AS address, length, string"
+          " FROM __internal_strings"
+      )
+      conn.execute(
+          "INSERT INTO __internal_strings VALUES (4096, 4101, 5, ?)", (text,)
+      )
+    query._created_tables.add("strings")
+    query._created_tables.add("__internal_strings")
+    self.addCleanup(query._created_tables.discard, "strings")
+    self.addCleanup(query._created_tables.discard, "__internal_strings")
+
+  def test_sql_query_dirty_strings_rebuilds_directly_without_popup(self):
+    self._create_strings_table("stale")
+    query._strings_dirty = True
+
+    def fake_populate_strings():
+      conn = query._get_rw_conn()
+      with query._db_write_lock:
+        conn.execute("UPDATE __internal_strings SET string = 'fresh'")
+      query._strings_dirty = False
+
+    with (
+        mock.patch.object(query, "_db_initialized", True),
+        mock.patch.object(query.idaapi, "is_headless", False),
+        mock.patch.dict(query.POPULATORS, {"strings": fake_populate_strings}),
+    ):
+      results = asyncio.run(
+          query.sql_query([{
+              "sql": "SELECT string FROM strings",
+              "tables": ["strings"],
+          }])
+      )
+
+    self.assertFalse(query._strings_dirty)
+    self.assertEqual(results[0]["rows"], [{"string": "fresh"}])
+
+  def test_sql_query_clean_strings_skips_rebuild(self):
+    self._create_strings_table("existing")
+    query._strings_dirty = False
+    pop = mock.MagicMock()
+
+    with (
+        mock.patch.object(query, "_db_initialized", True),
+        mock.patch.object(query.idaapi, "is_headless", False),
+        mock.patch.dict(query.POPULATORS, {"strings": pop}),
+    ):
+      results = asyncio.run(
+          query.sql_query([{
+              "sql": "SELECT string FROM strings",
+              "tables": ["strings"],
+          }])
+      )
+
+    pop.assert_not_called()
+    self.assertEqual(results[0]["rows"], [{"string": "existing"}])
 
 
 if __name__ == "__main__":

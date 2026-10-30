@@ -245,6 +245,7 @@ example of all available settings (showing defaults):
   "populate_tables_on_startup": false,
   "sqlite_persistent": false,
   "check_entries_freshness": false,
+  "rebuild_strings_on_data_patch": false,
   "disabled_tools": [],
   "flush_after_write": false,
   "gui_undo_points": false,
@@ -289,6 +290,11 @@ example of all available settings (showing defaults):
     static binary exports (functions and global data symbols) and are not
     expected to change after initial auto-analysis completes, this option
     defaults to `False`.
+*   **rebuild_strings_on_data_patch**: If `True`, patching non-function bytes
+    that do not belong to any existing string marks the `strings` table dirty so
+    the next `strings` query rebuilds it (for example, after decrypting strings
+    in a data section). Patches inside an existing string are always updated or
+    rebuilt automatically regardless of this setting. Defaults to `False`.
 *   **disabled_tools**: A list of case-insensitive regular expressions. Any tool
     whose name matches a pattern in this list will not be registered. Use this
     to restrict the agent's capabilities.

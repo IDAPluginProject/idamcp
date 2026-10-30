@@ -154,6 +154,28 @@ class TestConfig(unittest.TestCase):
       config = shared.config.load_config(config_path="/nonexistent")
       self.assertTrue(config.get("check_entries_freshness"))
 
+  def test_rebuild_strings_on_data_patch_default(self):
+    """Test default value for rebuild_strings_on_data_patch is False."""
+    config = shared.config.load_config(config_path="/nonexistent")
+    self.assertIs(config.get("rebuild_strings_on_data_patch"), False)
+
+  def test_rebuild_strings_on_data_patch_user_and_env(self):
+    """Test user config and env override for rebuild_strings_on_data_patch."""
+    with mock.patch(
+        "builtins.open",
+        mock.mock_open(read_data='{"rebuild_strings_on_data_patch": true}'),
+    ):
+      with mock.patch("pathlib.Path.is_file", return_value=True):
+        config = shared.config.load_config()
+        self.assertIs(config.get("rebuild_strings_on_data_patch"), True)
+
+    shared.config.load_config.cache_clear()
+    with mock.patch.dict(
+        "os.environ", {"REBUILD_STRINGS_ON_DATA_PATCH": "true"}
+    ):
+      config = shared.config.load_config(config_path="/nonexistent")
+      self.assertIs(config.get("rebuild_strings_on_data_patch"), True)
+
   def test_gui_undo_points_default(self):
     """Test gui_undo_points is off by default."""
     config = shared.config.load_config(config_path="/nonexistent")
