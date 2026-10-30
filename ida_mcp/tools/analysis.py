@@ -47,6 +47,7 @@ import idc
 from shared.config import load_config
 from shared.rpc import ToolError
 from shared.types import Address
+from shared.types import AddressValue
 from shared.types import BasicBlock
 from shared.types import Caller
 from shared.types import CallGraph
@@ -348,8 +349,12 @@ def _get_ida_view(start_ea: "idaapi.ea_t", end_ea: "idaapi.ea_t") -> str:
 @jsonrpc
 @idaread
 def get_ida_view(
-    start_ea: Annotated[str, "Start address of the view"],
-    end_ea: Annotated[str, "End address of the view"],
+    start_ea: Annotated[
+        AddressValue, Field(description="Start address of the view")
+    ],
+    end_ea: Annotated[
+        AddressValue, Field(description="End address of the view")
+    ],
     include_bytes: Annotated[
         bool, "Whether to include opcode or data bytes in the view output"
     ] = False,
@@ -694,8 +699,12 @@ def get_call_graph_to(
 @jsonrpc
 @idaread
 def get_call_graph_between(
-    start_ea: Annotated[str, "Address of the start function"],
-    end_ea: Annotated[str, "Address of the destination function"],
+    start_ea: Annotated[
+        AddressValue, Field(description="Address of the start function")
+    ],
+    end_ea: Annotated[
+        AddressValue, Field(description="Address of the destination function")
+    ],
     max_depth: Annotated[int, "Maximum call depth"] = 5,
     max_paths: Annotated[int, "Maximum number of paths to return"] = 10,
 ) -> CallGraph:
@@ -843,14 +852,14 @@ def _search_binary(
         str, "Hex pattern to search for (e.g. '55 8B EC' or '55 8B ??')"
     ],
     start_ea: Annotated[
-        str | None,
+        AddressValue | None,
         (
             "Low address bound for the search range. Defaults to the minimum"
             " address of the binary if omitted."
         ),
     ] = None,
     end_ea: Annotated[
-        str | None,
+        AddressValue | None,
         (
             "High address bound for the search range. Defaults to the maximum"
             " address of the binary if omitted."
@@ -975,14 +984,14 @@ def search_binary(
         str, "Hex pattern to search for (e.g. '55 8B EC' or '55 8B ??')"
     ],
     start_ea: Annotated[
-        str | None,
+        AddressValue | None,
         (
             "Low address bound for the search range. Defaults to the minimum"
             " address of the binary if omitted."
         ),
     ] = None,
     end_ea: Annotated[
-        str | None,
+        AddressValue | None,
         (
             "High address bound for the search range. Defaults to the maximum"
             " address of the binary if omitted."
@@ -1027,14 +1036,14 @@ def search_binary(
 def search_text(
     text: Annotated[str, "Text to search for"],
     start_ea: Annotated[
-        str | None,
+        AddressValue | None,
         (
             "Low address bound for the search range. Defaults to the minimum"
             " address of the binary if omitted."
         ),
     ] = None,
     end_ea: Annotated[
-        str | None,
+        AddressValue | None,
         (
             "High address bound for the search range. Defaults to the maximum"
             " address of the binary if omitted."

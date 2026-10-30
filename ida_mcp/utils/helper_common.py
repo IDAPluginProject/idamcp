@@ -180,6 +180,8 @@ def check_address(address: int, raise_error=True) -> int | None:
 
 
 def parse_int(n: str | int) -> int:
+  if isinstance(n, bool):
+    raise ToolError(f"Failed to parse integer: {n}")
   if isinstance(n, int):
     return n
   try:

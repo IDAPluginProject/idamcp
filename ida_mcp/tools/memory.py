@@ -34,6 +34,7 @@ import idaapi
 from shared.rpc import ToolError
 from shared.types import (
     Address,
+    AddressValue,
     AliasChoices,
     BatchResponseItem,
     Field,
@@ -124,7 +125,9 @@ def get_global_variable_value_by_name(
 @jsonrpc
 @idaread
 def get_global_variable_value_at_address(
-    reqs: Annotated[List[str], "List of addresses of global variables"],
+    reqs: Annotated[
+        List[AddressValue], "List of addresses of global variables"
+    ],
 ) -> List[BatchResponseItem]:
   """Read global variables' values by their addresses (if known at compile-time).
 

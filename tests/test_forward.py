@@ -858,6 +858,276 @@ class TestParameterAliases(unittest.IsolatedAsyncioTestCase):
       spec.loader.exec_module(mod)
 
     self.assertEqual(mod.ADDRESS_ALIASES, ("address", "ea", "addr"))
+    self.assertIs(get_origin(mod.AddressValue), Annotated)
+    self.assertIs(get_args(mod.AddressValue)[0], str)
     ann = Annotated[mod.Address, mod.Field(description="desc")]
     self.assertIs(get_origin(ann), Annotated)
     self.assertIs(get_args(ann)[0], str)
+
+
+class TestIntegerAddresses(unittest.IsolatedAsyncioTestCase):
+  """Tests integer address coercion and 53-bit precision bounds."""
+
+  async def asyncSetUp(self):
+    # pylint: disable=g-import-not-at-top
+    import gateway.patcher  # pylint: disable=unused-import
+    import gateway.proxy  # pylint: disable=unused-import
+    import gateway.query  # pylint: disable=unused-import
+
+    # pylint: enable=g-import-not-at-top
+    self.mcp_server = forward.mcp_server
+
+  async def test_address_tools_accept_safe_integers(self):
+    """Test Address parameters accept 0..2^53-1 ints and normalize to hex."""
+    # pylint: disable=g-import-not-at-top
+    from shared.types import MAX_SAFE_JSON_INT
+
+    # pylint: enable=g-import-not-at-top
+    cases = (
+        (0, "0x0"),
+        (0x401000, "0x401000"),
+        (MAX_SAFE_JSON_INT, "0x1fffffffffffff"),
+    )
+    with mock.patch(
+        "gateway.proxy.forward_to",
+        new_callable=mock.AsyncMock,
+        return_value="int main() {}",
+    ) as mock_forward:
+      for addr_key in _ADDRESS_KEYS:
+        for int_val, expected_hex in cases:
+          with self.subTest(addr_key=addr_key, int_val=int_val):
+            mock_forward.reset_mock()
+            await self.mcp_server.call_tool(
+                "decompile_function", {"database_id": "db1", addr_key: int_val}
+            )
+            _, _, args = mock_forward.await_args.args
+            self.assertEqual(args["address"], expected_hex)
+
+  async def test_address_tools_reject_invalid_or_unsafe_integers(self):
+    """Test booleans, floats, negative ints, and ints >= 2^53 are rejected."""
+    # pylint: disable=g-import-not-at-top
+    from fastmcp.exceptions import ValidationError
+    from shared.types import MAX_SAFE_JSON_INT
+
+    # pylint: enable=g-import-not-at-top
+    for bad in (True, False, 4198400.0, -1):
+      with self.subTest(bad=bad):
+        with self.assertRaises(ValidationError):
+          await self.mcp_server.call_tool(
+              "decompile_function", {"database_id": "db1", "address": bad}
+          )
+
+    for unsafe_int in (MAX_SAFE_JSON_INT + 1, 0xFFFFFFFF81000001):
+      with self.subTest(unsafe_int=unsafe_int):
+        with self.assertRaisesRegex(ValidationError, "0x1fffffffffffff"):
+          await self.mcp_server.call_tool(
+              "decompile_function",
+              {"database_id": "db1", "address": unsafe_int},
+          )
+
+    # Strings above 2^53-1 remain accepted without precision loss.
+    with mock.patch(
+        "gateway.proxy.forward_to",
+        new_callable=mock.AsyncMock,
+        return_value="void kmain() {}",
+    ) as mock_forward:
+      await self.mcp_server.call_tool(
+          "decompile_function",
+          {"database_id": "db1", "address": "0xffffffff81000001"},
+      )
+      _, _, args = mock_forward.await_args.args
+      self.assertEqual(args["address"], "0xffffffff81000001")
+
+  async def test_range_and_base_address_parameters_accept_integers(self):
+    """Test start_ea, end_ea, and base_address accept safe integers."""
+    # pylint: disable=g-import-not-at-top
+    from fastmcp.exceptions import ValidationError
+    from shared.load_options import LoadOptions
+    from shared.types import MAX_SAFE_JSON_INT
+
+    # pylint: enable=g-import-not-at-top
+    with mock.patch(
+        "gateway.proxy.forward_to",
+        new_callable=mock.AsyncMock,
+    ) as mock_forward:
+      mock_forward.return_value = "nop"
+      await self.mcp_server.call_tool(
+          "get_ida_view",
+          {"database_id": "db1", "start_ea": 0x401000, "end_ea": 0x401020},
+      )
+      _, _, args = mock_forward.await_args.args
+      self.assertEqual(args["start_ea"], "0x401000")
+      self.assertEqual(args["end_ea"], "0x401020")
+
+      mock_forward.return_value = {"nodes": [], "edges": []}
+      await self.mcp_server.call_tool(
+          "get_call_graph_between",
+          {"database_id": "db1", "start_ea": 0x401000, "end_ea": 0x402000},
+      )
+      _, _, args = mock_forward.await_args.args
+      self.assertEqual(args["start_ea"], "0x401000")
+      self.assertEqual(args["end_ea"], "0x402000")
+
+      mock_forward.return_value = {"addresses": []}
+      await self.mcp_server.call_tool(
+          "search_binary",
+          {
+              "database_id": "db1",
+              "pattern": "90",
+              "start_ea": 0x401000,
+              "end_ea": 0x402000,
+          },
+      )
+      _, _, args = mock_forward.await_args.args
+      self.assertEqual(args["start_ea"], "0x401000")
+      self.assertEqual(args["end_ea"], "0x402000")
+
+      await self.mcp_server.call_tool(
+          "search_text",
+          {
+              "database_id": "db1",
+              "text": "hello",
+              "start_ea": 0x401000,
+              "end_ea": None,
+          },
+      )
+      _, _, args = mock_forward.await_args.args
+      self.assertEqual(args["start_ea"], "0x401000")
+      self.assertIsNone(args["end_ea"])
+
+      mock_forward.return_value = "success"
+      await self.mcp_server.call_tool(
+          "make_strings",
+          {"database_id": "db1", "start_ea": 0x401000, "end_ea": 0x401010},
+      )
+      _, _, args = mock_forward.await_args.args
+      self.assertEqual(args["start_ea"], "0x401000")
+      self.assertEqual(args["end_ea"], "0x401010")
+
+      await self.mcp_server.call_tool(
+          "make_strings", {"database_id": "db1", "start_ea": 0x401000}
+      )
+      _, _, args = mock_forward.await_args.args
+      self.assertEqual(args["start_ea"], "0x401000")
+      self.assertEqual(args["end_ea"], "")
+
+    fake_info = {
+        "database_id": "db1",
+        "pid": 1001,
+        "filepath": "/tmp/test.bin",
+        "database_path": "/tmp/test.bin.i64",
+        "imagebase": "0x10000",
+        "imagesize": "0x1000",
+        "sha256": "0" * 64,
+        "filesize": "0x1000",
+        "filetype": "Binary file",
+        "bitness": 32,
+        "procname": "arm",
+        "is_headless": True,
+    }
+    with mock.patch.object(
+        _headless_manager,
+        "spawn",
+        new_callable=mock.AsyncMock,
+        return_value=fake_info,
+    ) as mock_spawn:
+      await self.mcp_server.call_tool(
+          "idalib_headless_open",
+          {"path": "/tmp/test.bin", "base_address": 0x10000},
+      )
+      self.assertEqual(
+          mock_spawn.await_args.args[1], LoadOptions(base_address=0x10000)
+      )
+
+    with self.assertRaisesRegex(ValidationError, "0x1fffffffffffff"):
+      await self.mcp_server.call_tool(
+          "idalib_headless_open",
+          {"path": "/tmp/test.bin", "base_address": MAX_SAFE_JSON_INT + 1},
+      )
+
+  async def test_batch_request_addresses_accept_integers(self):
+    """Test list and dataclass request address fields accept safe integers."""
+    # pylint: disable=g-import-not-at-top
+    from fastmcp.exceptions import ValidationError
+    from shared.types import MAX_SAFE_JSON_INT
+
+    # pylint: enable=g-import-not-at-top
+    with mock.patch(
+        "gateway.proxy.forward_to",
+        new_callable=mock.AsyncMock,
+    ) as mock_forward:
+      mock_forward.return_value = [{"success": True, "value": "0x1"}]
+      await self.mcp_server.call_tool(
+          "get_global_variable_value_at_address",
+          {"database_id": "db1", "reqs": [0x401000, "0x402000"]},
+      )
+      _, _, args = mock_forward.await_args.args
+      self.assertEqual(args["reqs"], ["0x401000", "0x402000"])
+
+      await self.mcp_server.call_tool(
+          "read_data",
+          {
+              "database_id": "db1",
+              "reqs": [{"address": 0x401000, "data_type": "dword"}],
+          },
+      )
+      _, _, args = mock_forward.await_args.args
+      self.assertEqual(args["reqs"][0].address, "0x401000")
+
+      mock_forward.return_value = "success"
+      await self.mcp_server.call_tool(
+          "rename_addresses",
+          {
+              "database_id": "db1",
+              "reqs": [{"address": 0x401000, "new_name": "main_fn"}],
+          },
+      )
+      _, _, args = mock_forward.await_args.args
+      self.assertEqual(args["reqs"][0].address, "0x401000")
+
+      await self.mcp_server.call_tool(
+          "convert_to_offsets",
+          {
+              "database_id": "db1",
+              "reqs": [{"address": 0x401000, "base": 0x400000}],
+          },
+      )
+      _, _, args = mock_forward.await_args.args
+      self.assertEqual(args["reqs"][0].address, "0x401000")
+      self.assertEqual(args["reqs"][0].base, "0x400000")
+
+    with mock.patch(
+        "gateway.patcher.forward_to",
+        new_callable=mock.AsyncMock,
+        side_effect=[
+            [{
+                "address": "0x401000",
+                "procname": "metapc",
+                "bitness": 64,
+                "is_be": False,
+                "is_thumb": False,
+                "symbols": {},
+            }],
+            "success",
+        ],
+    ) as mock_patch_forward:
+      await self.mcp_server.call_tool(
+          "patch_assembly",
+          {
+              "database_id": "db1",
+              "reqs": [{"address": 0x401000, "instructions": "nop"}],
+          },
+      )
+      ctx_args = mock_patch_forward.await_args_list[0].args[2]
+      self.assertEqual(ctx_args["reqs"][0].address, "0x401000")
+
+    with self.assertRaisesRegex(ValidationError, "0x1fffffffffffff"):
+      await self.mcp_server.call_tool(
+          "rename_addresses",
+          {
+              "database_id": "db1",
+              "reqs": [
+                  {"address": MAX_SAFE_JSON_INT + 1, "new_name": "bad_ea"}
+              ],
+          },
+      )

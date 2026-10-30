@@ -103,8 +103,12 @@ async def disassemble_code(
 @mcp_tool
 async def get_ida_view(
     database_id: DatabaseId,
-    start_ea: Annotated[str, "Start address of the view"],
-    end_ea: Annotated[str, "End address of the view"],
+    start_ea: Annotated[
+        AddressValue, Field(description="Start address of the view")
+    ],
+    end_ea: Annotated[
+        AddressValue, Field(description="End address of the view")
+    ],
     include_bytes: Annotated[
         bool, "Whether to include opcode or data bytes in the view output"
     ] = False,
@@ -225,8 +229,12 @@ async def get_call_graph_to(
 @mcp_tool
 async def get_call_graph_between(
     database_id: DatabaseId,
-    start_ea: Annotated[str, "Address of the start function"],
-    end_ea: Annotated[str, "Address of the destination function"],
+    start_ea: Annotated[
+        AddressValue, Field(description="Address of the start function")
+    ],
+    end_ea: Annotated[
+        AddressValue, Field(description="Address of the destination function")
+    ],
     max_depth: Annotated[int, "Maximum call depth"] = 5,
     max_paths: Annotated[int, "Maximum number of paths to return"] = 10,
 ) -> CallGraph:
@@ -252,14 +260,14 @@ async def search_binary(
         str, "Hex pattern to search for (e.g. '55 8B EC' or '55 8B ??')"
     ],
     start_ea: Annotated[
-        str | None,
+        AddressValue | None,
         (
             "Low address bound for the search range. Defaults to the minimum"
             " address of the binary if omitted."
         ),
     ] = None,
     end_ea: Annotated[
-        str | None,
+        AddressValue | None,
         (
             "High address bound for the search range. Defaults to the maximum"
             " address of the binary if omitted."
@@ -304,14 +312,14 @@ async def search_text(
     database_id: DatabaseId,
     text: Annotated[str, "Text to search for"],
     start_ea: Annotated[
-        str | None,
+        AddressValue | None,
         (
             "Low address bound for the search range. Defaults to the minimum"
             " address of the binary if omitted."
         ),
     ] = None,
     end_ea: Annotated[
-        str | None,
+        AddressValue | None,
         (
             "High address bound for the search range. Defaults to the maximum"
             " address of the binary if omitted."
@@ -815,12 +823,16 @@ async def make_structs(
 @mcp_tool
 async def make_strings(
     database_id: DatabaseId,
-    start_ea: Annotated[str, "Address to create string at"],
+    start_ea: Annotated[
+        AddressValue, Field(description="Address to create string at")
+    ],
     end_ea: Annotated[
-        str,
-        (
-            "Ending address of the string (exclusive). If empty (default),"
-            " length will be calculated automatically."
+        AddressValue,
+        Field(
+            description=(
+                "Ending address of the string (exclusive). If empty (default),"
+                " length will be calculated automatically."
+            )
         ),
     ] = "",
 ) -> str:
@@ -1103,7 +1115,9 @@ async def get_global_variable_value_by_name(
 @mcp_tool
 async def get_global_variable_value_at_address(
     database_id: DatabaseId,
-    reqs: Annotated[List[str], "List of addresses of global variables"],
+    reqs: Annotated[
+        List[AddressValue], "List of addresses of global variables"
+    ],
 ) -> List[BatchResponseItem]:
   """Read global variables' values by their addresses (if known at compile-time).
 

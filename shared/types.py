@@ -34,12 +34,17 @@ from typing import (
 
 try:
   from pydantic import AliasChoices  # pylint: disable=g-import-not-at-top
+  from pydantic import BeforeValidator  # pylint: disable=g-import-not-at-top
   from pydantic import Field  # pylint: disable=g-import-not-at-top
 except Exception:  # pylint: disable=broad-exception-caught
   # pylint: disable=invalid-name
   def AliasChoices(*choices: str) -> Any:
     """Dummy pydantic.AliasChoices when pydantic is unavailable."""
     return choices
+
+  def BeforeValidator(func: Any) -> Any:
+    """Dummy pydantic.BeforeValidator when pydantic is unavailable."""
+    return func
 
   def Field(*args: Any, **kwargs: Any) -> Any:
     """Dummy pydantic.Field when pydantic is unavailable."""
@@ -48,9 +53,34 @@ except Exception:  # pylint: disable=broad-exception-caught
   # pylint: enable=invalid-name
 
 
+MAX_SAFE_JSON_INT = (1 << 53) - 1
+
+
+def coerce_address(value: Any) -> Any:
+  """Converts a non-negative safe JSON integer address to a hex string."""
+  if isinstance(value, bool):
+    raise ValueError("Boolean is not a valid address")
+  if isinstance(value, int):
+    if value < 0:
+      raise ValueError(f"Address must be non-negative, got {value}")
+    if value > MAX_SAFE_JSON_INT:
+      raise ValueError(
+          f"Integer address {value:#x} exceeds JSON safe integer limit"
+          " (0x1fffffffffffff) and may have lost precision; pass a hex"
+          " string (e.g. '0xffffffff81000000') instead"
+      )
+    return hex(value)
+  return value
+
+
 ADDRESS_ALIASES = AliasChoices("address", "ea", "addr")
 
-Address = Annotated[str, Field(validation_alias=ADDRESS_ALIASES)]
+# Keep a Field(description=...) next to a bare AddressValue parameter rather
+# than a description string: Annotated[AddressValue, "desc"] flattens to
+# Annotated[str, BeforeValidator, "desc"], and FastMCP only turns a string into
+# a description when Annotated has exactly two arguments.
+AddressValue = Annotated[str, BeforeValidator(coerce_address)]
+Address = Annotated[AddressValue, Field(validation_alias=ADDRESS_ALIASES)]
 
 
 class Argument(TypedDict):
@@ -286,7 +316,7 @@ class SetCommentResult(TypedDict):
 @dataclass
 class RenameAddressRequest:
   address: Annotated[
-      str,
+      AddressValue,
       "Linear address. do nothing if address is not valid. tail bytes can't"
       " have names.",
   ]
@@ -295,7 +325,7 @@ class RenameAddressRequest:
 
 @dataclass
 class SetColorRequest:
-  address: Annotated[str, "The address of the item to color"]
+  address: Annotated[AddressValue, "The address of the item to color"]
   color: Annotated[
       str | int,
       "new color code in RGB (hex 0xBBGGRR) (hex string or integer)",
@@ -309,7 +339,7 @@ class SetColorRequest:
 
 @dataclass
 class PatchAssemblyRequest:
-  address: Annotated[str, "Starting Address to apply patch"]
+  address: Annotated[AddressValue, "Starting Address to apply patch"]
   instructions: Annotated[str, "Assembly instructions separated by ';'"]
   syntax: Annotated[
       Literal["intel", "nasm", "att"] | None,
@@ -319,7 +349,9 @@ class PatchAssemblyRequest:
 
 @dataclass
 class AssemblyContextRequest:
-  address: Annotated[str, "Address to check segment registers and validate"]
+  address: Annotated[
+      AddressValue, "Address to check segment registers and validate"
+  ]
   symbols: Annotated[List[str], "List of symbol names to resolve"] = field(
       default_factory=list
   )
@@ -372,7 +404,7 @@ class StackFrameVariableTypeChange:
 
 @dataclass
 class SetTypeRequest:
-  address: Annotated[str, "Address or name of object to set type"]
+  address: Annotated[AddressValue, "Address or name of object to set type"]
   new_type: Annotated[
       str,
       (
@@ -384,7 +416,7 @@ class SetTypeRequest:
 
 @dataclass
 class AddEntryPointRequest:
-  address: Annotated[str, "Linear address of the entry point"]
+  address: Annotated[AddressValue, "Linear address of the entry point"]
   name: Annotated[
       str,
       "name of entry point. If the specified location already has a name, the"
@@ -402,7 +434,7 @@ class AddEntryPointRequest:
 
 @dataclass
 class PatchBytesRequest:
-  address: Annotated[str, "Address to patch bytes at"]
+  address: Annotated[AddressValue, "Address to patch bytes at"]
   hex_string: Annotated[
       str,
       "Hex string of bytes to patch (e.g. '90 90' or '9090'), max 0x1000"
@@ -412,18 +444,22 @@ class PatchBytesRequest:
 
 @dataclass
 class ConvertToOffsetRequest:
-  address: Annotated[str, "Address of the instruction or global variable"]
+  address: Annotated[
+      AddressValue, "Address of the instruction or global variable"
+  ]
   op_index: Annotated[
       int,
       "Operand index (0-based). Use 0 (default) for data items/global"
       " variables.",
   ] = 0
-  base: Annotated[str, "Base address for the offset (default '0')"] = "0"
+  base: Annotated[
+      AddressValue, "Base address for the offset (default '0')"
+  ] = "0"
 
 
 @dataclass
 class MakeDataRequest:
-  address: Annotated[str, "Address to create data at"]
+  address: Annotated[AddressValue, "Address to create data at"]
   data_type: Annotated[
       str,
       (
@@ -435,7 +471,9 @@ class MakeDataRequest:
 
 @dataclass
 class ReadDataRequest:
-  address: Annotated[str, "Address (hex string) of the memory value to be read"]
+  address: Annotated[
+      AddressValue, "Address (hex string) of the memory value to be read"
+  ]
   data_type: Annotated[
       Literal["byte", "word", "dword", "qword", "string", "bytes"],
       "The type of data to read ('byte', 'word', 'dword', 'qword', 'string',"

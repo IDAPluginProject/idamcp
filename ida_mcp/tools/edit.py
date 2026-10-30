@@ -40,6 +40,7 @@ from shared.rpc import ToolError
 from shared.types import (
     AddEntryPointRequest,
     Address,
+    AddressValue,
     ConvertToOffsetRequest,
     Field,
     LocalVariableRename,
@@ -742,7 +743,7 @@ def convert_to_offsets(
       continue
 
     try:
-      base_ea = int(req.base, 0)
+      base_ea = helper.parse_int(req.base)
     except Exception:
       errors.append(
           f"Failed to parse base address {req.base} for {req.address}"
@@ -848,12 +849,16 @@ def make_structs(
 @jsonrpc
 @idawrite
 def make_strings(
-    start_ea: Annotated[str, "Address to create string at"],
+    start_ea: Annotated[
+        AddressValue, Field(description="Address to create string at")
+    ],
     end_ea: Annotated[
-        str,
-        (
-            "Ending address of the string (exclusive). If empty (default),"
-            " length will be calculated automatically."
+        AddressValue,
+        Field(
+            description=(
+                "Ending address of the string (exclusive). If empty (default),"
+                " length will be calculated automatically."
+            )
         ),
     ] = "",
 ) -> str:

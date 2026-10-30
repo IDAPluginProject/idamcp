@@ -48,6 +48,7 @@ from shared import load_options
 from shared.config import load_config
 from shared.rpc import RPCClient
 from shared.rpc import RPCError
+from shared.types import AddressValue
 from shared.types import Metadata
 from watchdog.events import (
     DirDeletedEvent,
@@ -1110,7 +1111,7 @@ async def idalib_headless_open(
         " 'Binary file'. Only for new binaries; needs IDA 9.1+",
     ] = None,
     base_address: Annotated[
-        str | None,
+        AddressValue | None,
         "Optional 16-byte aligned load address (IDA's -b), e.g. '0x10000'."
         " Only for new binaries; needs IDA 9.1+",
     ] = None,
