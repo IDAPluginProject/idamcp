@@ -656,6 +656,7 @@ class TestWatcherFallback(unittest.IsolatedAsyncioTestCase):
 
 _DATABASE_ID_KEYS = ("database_id", "database", "db", "db_id", "id")
 _ADDRESS_KEYS = ("address", "ea", "addr")
+_SQL_KEYS = ("sql", "query", "queries", "sqls")
 
 
 class TestParameterAliases(unittest.IsolatedAsyncioTestCase):
@@ -678,7 +679,7 @@ class TestParameterAliases(unittest.IsolatedAsyncioTestCase):
         return_value=[{"rows": []}],
     ) as mock_forward:
       for db_key in _DATABASE_ID_KEYS:
-        for sql_key in ("sql", "query"):
+        for sql_key in _SQL_KEYS:
           with self.subTest(db_key=db_key, sql_key=sql_key):
             mock_forward.reset_mock()
             await self.mcp_server.call_tool(

@@ -377,7 +377,7 @@ async def sql_query(
     sql: Annotated[
         Union[List[str], str],
         Field(
-            validation_alias=AliasChoices("sql", "query"),
+            validation_alias=AliasChoices("sql", "query", "queries", "sqls"),
             description=(
                 "SQL query or queries to execute. Supports multiple queries"
                 " (in a list or separated by ';')."
